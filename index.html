@@ -644,18 +644,36 @@ function pointBoneTo(bone, targetWorldDir){
   bone.updateWorldMatrix(true, false);
 }
 
+// 1.0 = arm fully straight (shoulder→elbow and elbow→wrist point the same
+// way), fading toward 0.0 the more the elbow bends. Used to fade the
+// stretch amount OUT as the arm bends — a straight arm has no competing
+// bend for the skin weights to fight over, so stretch reads cleanly there;
+// a bent elbow is exactly where two different scale factors meeting at a
+// joint start to look distorted, so we back off automatically instead of
+// relying on a fixed clamp to cover every bend angle.
+function armStraightness(worldLandmarks, shoulderIdx, elbowIdx, wristIdx){
+  const s = worldLandmarks[shoulderIdx], e = worldLandmarks[elbowIdx], w = worldLandmarks[wristIdx];
+  if(!s || !e || !w) return 1;
+  const upper = mpVec(e).sub(mpVec(s));
+  const lower = mpVec(w).sub(mpVec(e));
+  if(upper.lengthSq() < 1e-8 || lower.lengthSq() < 1e-8) return 1;
+  upper.normalize(); lower.normalize();
+  return THREE.MathUtils.clamp(upper.dot(lower), 0, 1);
+}
+
 // Stretches `bone` along its local +Y (the axis pointBoneTo just aimed
 // toward the elbow) so this segment's rendered length tracks the live
 // shoulder→elbow distance, on top of whatever uniform body scale is
-// already applied. Tightly clamped (0.85–1.35, i.e. at most ±35%) and
-// smoothed slowly — this is a single bone, not a chain, but a bent elbow
-// still means the mesh weights blend across the LeftArm/LeftForeArm
-// boundary, so keeping the range modest matters for not looking distorted.
-function applyBoneStretch(bone, boneName, liveLen){
+// already applied. bendFactor (see armStraightness) fades the EXTRA
+// stretch toward 1.0 (i.e. no extra stretch, just bind-pose length) as the
+// elbow bends, so distortion only has room to show up when the arm is
+// straight enough that it wouldn't be visible anyway.
+function applyBoneStretch(bone, boneName, liveLen, bendFactor){
   const restLen = boneRestLength[boneName];
   if(!restLen) return;
   const globalScale = smoothedScale || 1;
-  const targetStretch = THREE.MathUtils.clamp((liveLen / restLen) / globalScale, 0.85, 1.35);
+  const rawTarget = THREE.MathUtils.clamp((liveLen / restLen) / globalScale, 0.85, 1.35);
+  const targetStretch = 1 + (rawTarget - 1) * bendFactor;
   const prev = smoothedStretch[boneName];
   const next = (prev === undefined) ? targetStretch : prev + (targetStretch - prev) * 0.12;
   smoothedStretch[boneName] = next;
@@ -663,6 +681,8 @@ function applyBoneStretch(bone, boneName, liveLen){
 }
 
 function applyPoseToSkeleton(worldLandmarks){
+  const leftBend = armStraightness(worldLandmarks, SHOULDER_L, ELBOW_L, WRIST_L);
+  const rightBend = armStraightness(worldLandmarks, SHOULDER_R, ELBOW_R, WRIST_R);
   for(const [boneName, pIdx, cIdx] of BONE_CHAINS){
     const bone = bones[boneName];
     if(!bone) continue;
@@ -674,7 +694,10 @@ function applyPoseToSkeleton(worldLandmarks){
     const liveLen = dir.length();
     if(liveLen < 1e-4) continue;
     pointBoneTo(bone, dir.clone().normalize());
-    if(STRETCH_BONES.has(boneName)) applyBoneStretch(bone, boneName, liveLen);
+    if(STRETCH_BONES.has(boneName)){
+      const bendFactor = boneName === 'LeftArm' ? leftBend : rightBend;
+      applyBoneStretch(bone, boneName, liveLen, bendFactor);
+    }
   }
 }
 
