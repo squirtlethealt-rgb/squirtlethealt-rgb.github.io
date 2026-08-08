@@ -254,6 +254,16 @@ const POSE_VISIBILITY_MIN = 0.5;
 // rotating the shoulder toward the same direction closes that gap.
 // 0 = old frozen behavior. 1 = shoulder fully tracks (looks robotic).
 const SHOULDER_FOLLOW_FACTOR = 0.35;
+// Hard ceiling on how far the clavicle itself is allowed to swing, in
+// degrees, no matter how extreme the tracked arm direction is. Without
+// this, a fixed 35% follow of a fully-overhead arm still rotates the
+// shoulder a lot -- and since its own parent (Spine2/chest) is deliberately
+// never touched (Spine2 -> Neck -> Head is what keeps the helmet locked to
+// your actual head via face tracking), that swing just moves the tearing
+// up one seam, from Shoulder|Arm to Spine2|Shoulder. Capping the angle
+// keeps that seam bounded through the normal range of motion.
+const MAX_SHOULDER_SWING_DEG = 40;
+const MAX_SHOULDER_SWING_RAD = THREE.MathUtils.degToRad(MAX_SHOULDER_SWING_DEG);
 
 const BONE_CHAINS = [
   ['LeftArm', SHOULDER_L, ELBOW_L],
@@ -542,7 +552,14 @@ function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks){
   bone.getWorldQuaternion(restQuat);
   const restDir = new THREE.Vector3(0,1,0).applyQuaternion(restQuat).normalize();
 
-  const blended = restDir.lerp(liveDir, SHOULDER_FOLLOW_FACTOR).normalize();
+  const angle = restDir.angleTo(liveDir);
+  if(angle < 1e-4) return;
+  // Same proportional follow as before, but never let the shoulder's own
+  // rotation exceed MAX_SHOULDER_SWING_RAD -- this is what keeps the
+  // Spine2|Shoulder seam bounded even when the arm goes fully overhead.
+  const desiredAngle = Math.min(angle * SHOULDER_FOLLOW_FACTOR, MAX_SHOULDER_SWING_RAD);
+  const t = desiredAngle / angle;
+  const blended = restDir.clone().lerp(liveDir, t).normalize();
   pointBoneTo(bone, blended);
 }
 
