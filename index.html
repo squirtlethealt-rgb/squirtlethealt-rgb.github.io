@@ -62,6 +62,8 @@
   .start-ring-inner svg{width:32px;height:32px;}
   .start-ring.spinning .start-ring-inner svg{animation:spin 1s linear infinite;}
   .start-ring.err{background:conic-gradient(#ff6b4d,#ff6b4d);}
+  .err-msg{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 30px);left:20px;right:20px;text-align:center;color:#ff6b4d;font:13px/1.4 -apple-system,sans-serif;display:none;}
+  .err-msg.show{display:block;}
 </style>
 </head>
 <body>
@@ -117,6 +119,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </div>
     </div>
+    <div class="err-msg" id="errMsg"></div>
   </div>
 </div>
 
@@ -158,12 +161,24 @@
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG — the one thing you need to change to re-embed this on Wix with a
 // different suit upload.
+//
+// This model is exported with KHR_draco_mesh_compression (required), so it
+// needs a DRACOLoader wired into the GLTFLoader below — that's what was
+// missing before and why nothing rendered. That part is already fixed.
+//
+// SUIT_URL: point this at wherever the .glb is actually hosted.
+//   - GitHub Pages: https://<username>.github.io/<repo>/Advanced_Crew_Escape_Suit.glb
+//   - jsDelivr (no Pages toggle needed, CORS built in):
+//       https://cdn.jsdelivr.net/gh/<username>/<repo>@main/Advanced_Crew_Escape_Suit.glb
+// See the setup steps at the end of this file / the chat reply for exactly
+// how to get that URL.
 // ─────────────────────────────────────────────────────────────────────────
-const SUIT_URL = 'https://static.wixstatic.com/3d/45c46c_a988569f5b6b4399b46fab26ed219a0e.glb';
+const SUIT_URL = 'https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/Advanced_Crew_Escape_Suit.glb';
 
 const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
@@ -171,6 +186,7 @@ const dotsCanvas = document.getElementById('dotsCanvas');
 const dotsCtx = dotsCanvas.getContext('2d');
 const statusEl = document.getElementById('status');
 const startBtn = document.getElementById('startBtn');
+const errMsg = document.getElementById('errMsg');
 const statusDot = document.getElementById('statusDot');
 const snapBtn = document.getElementById('snapBtn');
 const thumb = document.getElementById('thumb');
@@ -207,6 +223,7 @@ let baselineFaceWidthNDC = null;
 let baselineMetricProxy = null;
 let smoothedFaceWidthNDC = null;
 let mismatchStreak = 0;
+let suitLoadFailed = false;
 const CALIBRATION_FRAMES = 22;
 const REFIT_MISMATCH_RATIO = 0.32;
 const REFIT_MISMATCH_FRAMES = 18;
@@ -251,12 +268,24 @@ async function startCamera(){
     setViewfinderAspect(video.videoWidth, video.videoHeight);
     initThree();
     await Promise.all([loadTracking(), loadSuit()]);
+
+    if(suitLoadFailed){
+      startBtn.classList.remove('spinning');
+      startBtn.classList.add('err');
+      errMsg.textContent = 'Suit model failed to load — check SUIT_URL / CORS / hosting.';
+      errMsg.classList.add('show');
+      cameraStarted = false;
+      return;
+    }
+
     statusEl.classList.add('hidden');
     requestAnimationFrame(loop);
   }catch(err){
     console.error(err);
     startBtn.classList.remove('spinning');
     startBtn.classList.add('err');
+    errMsg.textContent = 'Camera permission denied or unavailable.';
+    errMsg.classList.add('show');
     cameraStarted = false;
   }
 }
@@ -305,7 +334,11 @@ async function loadTracking(){
 }
 
 // The suit model is a single full-body mesh (helmet to boots), authored
-// Z-up (a common Blender export quirk) rather than glTF's expected Y-up.
+// Z-up (a common Blender export quirk) rather than glTF's expected Y-up,
+// and is Draco-compressed (KHR_draco_mesh_compression is a REQUIRED
+// extension in this file — without a DRACOLoader wired into GLTFLoader,
+// the loader throws on this file and the mask never appears).
+//
 // We scan every vertex to find the true bounding box, treat the top ~15%
 // band (in the model's "tall" axis) as the helmet region, re-center the
 // pivot there, and use ONLY that region's width for scale calibration —
@@ -313,7 +346,14 @@ async function loadTracking(){
 // of the suit hangs below it at true proportion.
 function loadSuit(){
   return new Promise((resolve)=>{
+    const dracoLoader = new DRACOLoader();
+    // Google's hosted, versioned decoder — no self-hosting needed, and it's
+    // served with permissive CORS so it works from any origin (Wix included).
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+    dracoLoader.setDecoderConfig({ type: 'wasm' });
+
     const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
     loader.setCrossOrigin('anonymous');
     loader.load(SUIT_URL, (gltf)=>{
       maskModel = gltf.scene;
@@ -385,9 +425,12 @@ function loadSuit(){
         Math.max(headHalf.x, headHalf.y, headHalf.z, 0.001)
       );
 
+      dracoLoader.dispose();
       resolve();
     }, undefined, (err)=>{
       console.error('suit load failed', err);
+      suitLoadFailed = true;
+      dracoLoader.dispose();
       resolve();
     });
   });
