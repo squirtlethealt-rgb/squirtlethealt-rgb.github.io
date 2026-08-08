@@ -143,8 +143,8 @@
     <input type="range" id="rTilt" min="-45" max="45" step="1" value="0">
   </div>
   <div class="toggle-row">
-    <button class="icon-btn active" id="autoRefitBtn" aria-label="auto refit">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+    <button class="icon-btn active" id="poseRetargetBtn" aria-label="full body tracking">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v6l-3 7"/><path d="M12 13l3 7"/><path d="M8 10l4-1 4 1"/></svg>
     </button>
   </div>
 </div>
@@ -164,34 +164,47 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 
 // ─────────────────────────────────────────────────────────────────────────
-// CONFIG — the one thing you need to change to re-embed this on Wix with a
-// different suit upload.
+// CONFIG
 //
-// This model is exported with KHR_draco_mesh_compression (required), so it
-// needs a DRACOLoader wired into the GLTFLoader below — that's what was
-// missing before and why nothing rendered. That part is already fixed.
-//
-// SUIT_URL: point this at wherever the .glb is actually hosted.
-//   - GitHub Pages: https://<username>.github.io/<repo>/Advanced_Crew_Escape_Suit.glb
-//   - jsDelivr (no Pages toggle needed, CORS built in):
-//       https://cdn.jsdelivr.net/gh/<username>/<repo>@main/Advanced_Crew_Escape_Suit.glb
-// See the setup steps at the end of this file / the chat reply for exactly
-// how to get that URL.
+// SUIT_URL now points at the RIGGED suit (skeleton + skin weights, exported
+// from Blender after the Mixamo auto-rig pass). It's no longer Draco
+// compressed, but DRACOLoader is still wired into GLTFLoader — harmless if
+// unused, and keeps this working if you ever swap back to a compressed file.
 // ─────────────────────────────────────────────────────────────────────────
 const SUIT_URL = './Advanced_Crew_Escape_Suit.glb';
 
-// Quick tuning knobs — no need to touch anything else in this file for
-// "too small" / "facing the wrong way" complaints, just adjust these two:
-//   SCALE_BOOST: multiplies the auto-calibrated size. 1 = as detected.
-//     Raise it (e.g. 1.6, 2.0) if the suit looks tiny on your face.
-//   DEFAULT_FLIP: the helmet's "front" as authored in Blender may not be
-//     the side facing the camera. true rotates it 180° on load so it faces
-//     you instead of facing away (which looks like it's pressed up against
-//     your face / "kissing" you at close depth). Toggle with the flip
-//     button (top-right icon) live to see which orientation is correct,
-//     then set this to match so it's right by default.
-const SCALE_BOOST = 1.6;
+// Overall size fudge factor, applied on top of the live shoulder-width-based
+// auto-scale (see restShoulderWidth / smoothedScale below). Since scale is
+// now derived from real metric shoulder width instead of a guessed mesh
+// bounding box, start at 1.0 and only nudge it if the suit consistently
+// looks a bit big/small on you.
+const SCALE_BOOST = 1.0;
+
+// Same meaning as before: the helmet's authored "front" may not face the
+// camera by default. Toggle with the flip button (top-right) to check, then
+// set this to match so it's right on load.
 const DEFAULT_FLIP = true;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Pose landmark → 3D direction sign correction.
+//
+// MediaPipe's PoseLandmarker worldLandmarks are metric (meters), hip-
+// centered, right-handed. x follows the RAW (unmirrored) camera image's x
+// axis, y increases DOWNWARD (image convention), and z is roughly
+// depth-from-hips with smaller/more-negative values closer to the camera.
+// Three.js here uses a standard Y-up scene with the camera at the origin
+// looking down -Z, matching how the face-tracking matrix already renders
+// correctly. That means Y needs flipping to become Y-up; Z's sign is the
+// one most likely to need adjusting for your camera/setup.
+//
+// If limbs bend the WRONG way, this is where to fix it:
+//   - Left/right swapped or mirrored → flip POSE_X_SIGN
+//   - Arms point up when they should point down (or vice versa) → flip POSE_Y_SIGN
+//   - Elbows/knees bend forward when they should bend back (or vice versa) → flip POSE_Z_SIGN
+// ─────────────────────────────────────────────────────────────────────────
+const POSE_X_SIGN = 1;
+const POSE_Y_SIGN = -1;
+const POSE_Z_SIGN = -1;
 
 const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
@@ -210,16 +223,14 @@ const settingsBtn = document.getElementById('settingsBtn');
 const recalBtn = document.getElementById('recalBtn');
 const sheet = document.getElementById('sheet');
 const sheetBackdrop = document.getElementById('sheetBackdrop');
-const autoRefitBtn = document.getElementById('autoRefitBtn');
+const poseRetargetBtn = document.getElementById('poseRetargetBtn');
 const rFine = document.getElementById('rFine');
 const rDepth = document.getElementById('rDepth');
 const rHeight = document.getElementById('rHeight');
 const rTilt = document.getElementById('rTilt');
 
-// Icon-toggle state (replaces the old checkbox inputs — same booleans, just
-// driven by tap instead of a labelled checkbox).
 let showDots = true;
-let autoRefit = true;
+let poseRetargetEnabled = true;
 let flip180 = DEFAULT_FLIP;
 
 let faceLandmarker = null;
@@ -227,67 +238,64 @@ let trackingReady = false;
 let usingFallback = false;
 let lastMatrixData = null;
 let lastFaceLandmarks = null;
-let renderer, scene, camera, maskGroup, orientationGroup, maskModel;
-let maskHalfExtents = null;   // half-extents of the auto-detected HELMET region, used for scale calibration
-let shoulderLocalCenter = null;   // shoulder-band bbox center, in maskModel's local (post head-recenter) space
-let shoulderLocalHalf = null;     // shoulder-band bbox half-extents, same space
-let autoScale = 1;
-let calibrationSamples = [];
-let isCalibrated = false;
-let baselineFaceWidthNDC = null;
-let baselineShoulderWidthNDC = null;
-let baselineMetricProxy = null;
-let smoothedFaceWidthNDC = null;
-let smoothedShoulderWidthNDC = null;
-let mismatchStreak = 0;
+let renderer, scene, camera, maskGroup;
+let bones = null;            // { 'Hips': THREE.Bone, 'LeftArm': THREE.Bone, ... } (mixamorig: prefix stripped)
+let bonesReady = false;
+let restShoulderWidth = null; // bind-pose LeftArm↔RightArm distance, in the model's own (metric) units
+let smoothedScale = null;
+let manualOffset = {x:0, y:0};
 let suitLoadFailed = false;
-const CALIBRATION_FRAMES = 22;
-const REFIT_MISMATCH_RATIO = 0.32;
-const REFIT_MISMATCH_FRAMES = 18;
 const CHEEK_L = 234, CHEEK_R = 454;
 const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
 
-// Body pose tracking (BlazePose landmark indices) — used to fit the suit's
-// torso width off the actual shoulders instead of only extrapolating from
-// face width, which was the source of the "too small" sizing.
+// Body pose tracking (BlazePose landmark indices).
 let poseLandmarker = null;
 let poseTrackingReady = false;
-let lastPoseLandmarks = null;
-const SHOULDER_L = 11, SHOULDER_R = 12, HIP_L = 23, HIP_R = 24;
-const POSE_MARK_POINTS = [SHOULDER_L, SHOULDER_R, HIP_L, HIP_R];
+let lastPoseLandmarks = null;      // normalized (image-space), for the dot overlay only
+let lastPoseWorldLandmarks = null; // metric (meters), for retargeting
+const SHOULDER_L = 11, SHOULDER_R = 12;
+const ELBOW_L = 13, ELBOW_R = 14;
+const WRIST_L = 15, WRIST_R = 16;
+const HIP_L = 23, HIP_R = 24;
+const KNEE_L = 25, KNEE_R = 26;
+const ANKLE_L = 27, ANKLE_R = 28;
+const POSE_MARK_POINTS = [SHOULDER_L, SHOULDER_R, HIP_L, HIP_R, ELBOW_L, ELBOW_R, WRIST_L, WRIST_R, KNEE_L, KNEE_R, ANKLE_L, ANKLE_R];
 const POSE_VISIBILITY_MIN = 0.5;
 
-// Hand tracking — up to 2 hands, 21 landmarks each (MediaPipe hand model).
+// Each entry: [bone name (mixamorig: prefix stripped), parent landmark idx, child landmark idx].
+// The bone's local +Y axis points at its child in the bind pose (confirmed
+// from the exported GLB's joint translations), so pointBoneTo() below aligns
+// local +Y to the live parent→child direction.
+const BONE_CHAINS = [
+  ['LeftArm', SHOULDER_L, ELBOW_L],
+  ['LeftForeArm', ELBOW_L, WRIST_L],
+  ['RightArm', SHOULDER_R, ELBOW_R],
+  ['RightForeArm', ELBOW_R, WRIST_R],
+  ['LeftUpLeg', HIP_L, KNEE_L],
+  ['LeftLeg', KNEE_L, ANKLE_L],
+  ['RightUpLeg', HIP_R, KNEE_R],
+  ['RightLeg', KNEE_R, ANKLE_R],
+];
+
+// Hand tracking — up to 2 hands, 21 landmarks each (not yet wired to the
+// suit's index-finger bones; drawn as an overlay only, same as before).
 let handLandmarker = null;
 let handTrackingReady = false;
-let lastHandLandmarks = [];   // array of hands, each an array of 21 landmarks
+let lastHandLandmarks = [];
 const HAND_CONNECTIONS = [
-  [0,1],[1,2],[2,3],[3,4],           // thumb
-  [0,5],[5,6],[6,7],[7,8],           // index
-  [5,9],[9,10],[10,11],[11,12],      // middle
-  [9,13],[13,14],[14,15],[15,16],    // ring
-  [13,17],[17,18],[18,19],[19,20],   // pinky
-  [0,17]                             // palm base
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17]
 ];
 let dragging = false, dragStart = {x:0,y:0};
-let manualOffset = {x:0, y:0};
 let cameraStarted = false;
 
 function setViewfinderAspect(w, h){
   dotsCanvas.width = w;
   dotsCanvas.height = h;
-}
-
-function startRecalibration(){
-  calibrationSamples = [];
-  isCalibrated = false;
-  baselineFaceWidthNDC = null;
-  baselineShoulderWidthNDC = null;
-  baselineMetricProxy = null;
-  smoothedFaceWidthNDC = null;
-  smoothedShoulderWidthNDC = null;
-  mismatchStreak = 0;
-  statusDot.className = 'status-dot';
 }
 
 startBtn.addEventListener('click', ()=>{
@@ -314,7 +322,7 @@ async function startCamera(){
     if(suitLoadFailed){
       startBtn.classList.remove('spinning');
       startBtn.classList.add('err');
-      errMsg.textContent = 'Suit model failed to load — check SUIT_URL / CORS / hosting.';
+      errMsg.textContent = 'Suit model failed to load, or the expected skeleton bones were missing — check SUIT_URL / that this is the rigged export.';
       errMsg.classList.add('show');
       cameraStarted = false;
       return;
@@ -376,9 +384,9 @@ async function loadTracking(){
     return;
   }
 
-  // Body pose is a nice-to-have on top of face tracking, not a hard
-  // requirement — if it fails to load (slow connection, old device) we
-  // just fall back to face-only fitting, same as before this feature.
+  // Body pose drives the limb retargeting below — required for full-body
+  // movement. If it fails to load, the suit still positions itself off the
+  // face matrix, it just won't articulate arms/legs (stays in bind pose).
   try{
     poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
       baseOptions: {
@@ -390,7 +398,7 @@ async function loadTracking(){
     });
     poseTrackingReady = true;
   }catch(e){
-    console.warn('pose tracking unavailable, falling back to face-only fit', e);
+    console.warn('pose tracking unavailable, suit will stay in bind pose', e);
     poseTrackingReady = false;
   }
 
@@ -410,24 +418,19 @@ async function loadTracking(){
   }
 }
 
-// The suit model is a single full-body mesh (helmet to boots), authored
-// Z-up (a common Blender export quirk) rather than glTF's expected Y-up,
-// and is Draco-compressed (KHR_draco_mesh_compression is a REQUIRED
-// extension in this file — without a DRACOLoader wired into GLTFLoader,
-// the loader throws on this file and the mask never appears).
+// The suit is now a rigged, skinned model exported from Blender (Mixamo rig,
+// mixamorig: bone names). Blender's glTF exporter already bakes the correct
+// Z-up → Y-up conversion into the root node, so — unlike the old unrigged
+// suit — there's no manual axis/bbox detection needed here at all.
 //
-// We scan every vertex to find the true bounding box, treat the top ~15%
-// band (in the model's "tall" axis) as the helmet region, re-center the
-// pivot there. We also grab a second band just below it (~15%–30% down)
-// as the SHOULDER region. Calibration then blends two measurements — face
-// width vs. helmet width, AND live shoulder width (from body pose) vs.
-// suit shoulder width — so the fit is anchored to your actual body size,
-// not just extrapolated from your face.
+// We re-anchor the loaded hierarchy so the Head bone's BIND-POSE position
+// sits at maskGroup's local origin (0,0,0). That lets the rest of the code
+// keep using the face-tracking matrix as maskGroup's transform exactly like
+// before: the head lands where the face is, and the body hangs below it
+// according to the suit's own authored proportions.
 function loadSuit(){
   return new Promise((resolve)=>{
     const dracoLoader = new DRACOLoader();
-    // Google's hosted, versioned decoder — no self-hosting needed, and it's
-    // served with permissive CORS so it works from any origin (Wix included).
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
     dracoLoader.setDecoderConfig({ type: 'wasm' });
 
@@ -435,108 +438,42 @@ function loadSuit(){
     loader.setDRACOLoader(dracoLoader);
     loader.setCrossOrigin('anonymous');
     loader.load(SUIT_URL, (gltf)=>{
-      maskModel = gltf.scene;
-      maskModel.traverse(o=>{ if(o.isMesh){ o.frustumCulled = false; } });
-      maskModel.updateMatrixWorld(true);
+      const root = gltf.scene;
+      root.traverse(o=>{ if(o.isMesh){ o.frustumCulled = false; } });
 
-      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
-      const v = new THREE.Vector3();
-      maskModel.traverse(o=>{
-        if(o.isMesh && o.geometry && o.geometry.attributes.position){
-          const pos = o.geometry.attributes.position;
-          const mw = o.matrixWorld;
-          for(let i=0;i<pos.count;i++){
-            v.fromBufferAttribute(pos, i).applyMatrix4(mw);
-            if(v.x<minX)minX=v.x; if(v.x>maxX)maxX=v.x;
-            if(v.y<minY)minY=v.y; if(v.y>maxY)maxY=v.y;
-            if(v.z<minZ)minZ=v.z; if(v.z>maxZ)maxZ=v.z;
-          }
+      bones = {};
+      root.traverse(o=>{
+        if(o.isBone){
+          const shortName = o.name.replace(/^mixamorig:?/, '');
+          bones[shortName] = o;
         }
       });
 
-      const spanX = maxX-minX, spanY = maxY-minY, spanZ = maxZ-minZ;
-      const spans = [{axis:'x',span:spanX},{axis:'y',span:spanY},{axis:'z',span:spanZ}].sort((a,b)=>b.span-a.span);
-      const tallAxis = spans[0].axis;
-
-      const getComp = (vec,axis)=> axis==='x'?vec.x:(axis==='y'?vec.y:vec.z);
-      const tallMax = tallAxis==='x'?maxX:(tallAxis==='y'?maxY:maxZ);
-      const tallMin = tallAxis==='x'?minX:(tallAxis==='y'?minY:minZ);
-      const tallSpan = tallMax - tallMin;
-      const HEAD_BAND = 0.15;
-      const threshold = tallMax - HEAD_BAND*tallSpan;
-
-      let hMinX=Infinity,hMaxX=-Infinity,hMinY=Infinity,hMaxY=-Infinity,hMinZ=Infinity,hMaxZ=-Infinity;
-      maskModel.traverse(o=>{
-        if(o.isMesh && o.geometry && o.geometry.attributes.position){
-          const pos = o.geometry.attributes.position;
-          const mw = o.matrixWorld;
-          for(let i=0;i<pos.count;i++){
-            v.fromBufferAttribute(pos, i).applyMatrix4(mw);
-            if(getComp(v,tallAxis) >= threshold){
-              if(v.x<hMinX)hMinX=v.x; if(v.x>hMaxX)hMaxX=v.x;
-              if(v.y<hMinY)hMinY=v.y; if(v.y>hMaxY)hMaxY=v.y;
-              if(v.z<hMinZ)hMinZ=v.z; if(v.z>hMaxZ)hMaxZ=v.z;
-            }
-          }
-        }
-      });
-
-      const headCenter = new THREE.Vector3((hMinX+hMaxX)/2, (hMinY+hMaxY)/2, (hMinZ+hMaxZ)/2);
-      const headHalf = new THREE.Vector3((hMaxX-hMinX)/2, (hMaxY-hMinY)/2, (hMaxZ-hMinZ)/2);
-
-      // Shoulder band: the slice just below the head band. This is where
-      // a suit is at its widest across the torso, so it's the right region
-      // to compare against live shoulder-width from body pose tracking.
-      const SHOULDER_BAND_TOP = 0.15, SHOULDER_BAND_BOTTOM = 0.30;
-      const shThreshTop = tallMax - SHOULDER_BAND_TOP*tallSpan;
-      const shThreshBottom = tallMax - SHOULDER_BAND_BOTTOM*tallSpan;
-      let sMinX=Infinity,sMaxX=-Infinity,sMinY=Infinity,sMaxY=-Infinity,sMinZ=Infinity,sMaxZ=-Infinity;
-      maskModel.traverse(o=>{
-        if(o.isMesh && o.geometry && o.geometry.attributes.position){
-          const pos = o.geometry.attributes.position;
-          const mw = o.matrixWorld;
-          for(let i=0;i<pos.count;i++){
-            v.fromBufferAttribute(pos, i).applyMatrix4(mw);
-            const c = getComp(v,tallAxis);
-            if(c < shThreshTop && c >= shThreshBottom){
-              if(v.x<sMinX)sMinX=v.x; if(v.x>sMaxX)sMaxX=v.x;
-              if(v.y<sMinY)sMinY=v.y; if(v.y>sMaxY)sMaxY=v.y;
-              if(v.z<sMinZ)sMinZ=v.z; if(v.z>sMaxZ)sMaxZ=v.z;
-            }
-          }
-        }
-      });
-      if(isFinite(sMinX)){
-        const shoulderCenter = new THREE.Vector3((sMinX+sMaxX)/2, (sMinY+sMaxY)/2, (sMinZ+sMaxZ)/2);
-        const shoulderHalf = new THREE.Vector3((sMaxX-sMinX)/2, (sMaxY-sMinY)/2, (sMaxZ-sMinZ)/2);
-        shoulderLocalCenter = shoulderCenter.clone().sub(headCenter);
-        shoulderLocalHalf = new THREE.Vector3(
-          Math.max(shoulderHalf.x, 0.001),
-          Math.max(shoulderHalf.y, 0.001),
-          Math.max(shoulderHalf.z, 0.001)
-        );
+      if(!bones['Head'] || !bones['Hips'] || !bones['LeftArm'] || !bones['RightArm']){
+        console.error('Expected mixamorig bones not found on this GLB — is SUIT_URL pointing at the rigged export?');
+        suitLoadFailed = true;
+        dracoLoader.dispose();
+        resolve();
+        return;
       }
 
-      maskModel.position.sub(headCenter);
+      // Re-anchor so Head's bind-pose position becomes local (0,0,0).
+      root.updateMatrixWorld(true);
+      const headPos = new THREE.Vector3();
+      bones['Head'].getWorldPosition(headPos);
+      root.position.sub(headPos);
+      root.updateMatrixWorld(true);
 
-      orientationGroup = new THREE.Group();
-      if(tallAxis === 'z'){
-        orientationGroup.quaternion.setFromEuler(new THREE.Euler(-Math.PI/2, 0, 0));
-      } else if(tallAxis === 'x'){
-        orientationGroup.quaternion.setFromEuler(new THREE.Euler(0, 0, Math.PI/2));
-      }
-      orientationGroup.add(maskModel);
-      maskGroup.add(orientationGroup);
+      // Bind-pose shoulder width (LeftArm↔RightArm joint distance), used as
+      // the reference for live metric scaling below — this is now a real
+      // joint-to-joint measurement rather than a guessed mesh bounding box.
+      const lp = new THREE.Vector3(), rp = new THREE.Vector3();
+      bones['LeftArm'].getWorldPosition(lp);
+      bones['RightArm'].getWorldPosition(rp);
+      restShoulderWidth = lp.distanceTo(rp) || 0.3;
 
-      const halfOnTallAxis = tallAxis==='x'?headHalf.x:(tallAxis==='y'?headHalf.y:headHalf.z);
-      const widthAxis = tallAxis==='z' ? 'x' : (tallAxis==='x' ? 'y' : 'x');
-      const halfOnWidthAxis = widthAxis==='x'?headHalf.x:(widthAxis==='y'?headHalf.y:headHalf.z);
-      maskHalfExtents = new THREE.Vector3(
-        Math.max(halfOnWidthAxis, 0.001),
-        Math.max(halfOnTallAxis, 0.001),
-        Math.max(headHalf.x, headHalf.y, headHalf.z, 0.001)
-      );
-
+      maskGroup.add(root);
+      bonesReady = true;
       dracoLoader.dispose();
       resolve();
     }, undefined, (err)=>{
@@ -561,33 +498,49 @@ function enableDragFallback(){
   window.addEventListener('pointerup', ()=> dragging = false);
 }
 
-// worldMatrix here is "base" — the un-scaled face-tracking transform —
-// matching how calibration always measures the suit's INHERENT (scale=1)
-// projected size against a live measurement, then derives a ratio.
-// center/half are in maskModel's local space (same frame as maskHalfExtents),
-// so we rotate by orientationGroup's fixed quaternion to land in maskGroup's
-// local space before applying worldMatrix, same as the render pipeline does.
-function projectedRegionWidthNDC(worldMatrix, center, half){
-  const corners = [
-    [ half.x, half.y, half.z], [-half.x, half.y, half.z], [ half.x,-half.y, half.z], [-half.x,-half.y, half.z],
-    [ half.x, half.y,-half.z], [-half.x, half.y,-half.z], [ half.x,-half.y,-half.z], [-half.x,-half.y,-half.z]
-  ];
-  let minX = Infinity, maxX = -Infinity;
-  const v = new THREE.Vector3();
-  const q = orientationGroup ? orientationGroup.quaternion : new THREE.Quaternion();
-  for(const c of corners){
-    v.set(center.x+c[0], center.y+c[1], center.z+c[2]).applyQuaternion(q).applyMatrix4(worldMatrix).project(camera);
-    if(v.x < minX) minX = v.x;
-    if(v.x > maxX) maxX = v.x;
-  }
-  return maxX - minX;
-}
-const ZERO_VEC = new THREE.Vector3(0,0,0);
-function projectedMaskWidthNDC(worldMatrix){
-  return projectedRegionWidthNDC(worldMatrix, ZERO_VEC, maskHalfExtents);
+// Converts a MediaPipe world landmark (metric, hip-centered) into a
+// direction-safe THREE.Vector3 using the sign-correction constants above.
+// Only ever used for DIFFERENCES between two landmarks (bone directions) or
+// DISTANCES (shoulder width) — never as an absolute position — so the
+// exact origin/translation convention doesn't matter, only the axis signs.
+function mpVec(lm){
+  return new THREE.Vector3(lm.x*POSE_X_SIGN, lm.y*POSE_Y_SIGN, lm.z*POSE_Z_SIGN);
 }
 
-function applyCalibratedMatrix(){
+const _tmpQ = new THREE.Quaternion();
+const RESTY = new THREE.Vector3(0,1,0);
+
+// Rotates `bone` (in its own LOCAL space) so its bind-pose +Y axis points
+// along `targetWorldDir` (a world-space-aligned direction — see mpVec).
+// Requires bone.parent's matrixWorld to already reflect any rotation set
+// earlier this frame (we call updateWorldMatrix immediately after setting
+// each bone, so chains resolve top-down: Arm before ForeArm, etc).
+function pointBoneTo(bone, targetWorldDir){
+  bone.parent.updateWorldMatrix(true, false);
+  bone.parent.getWorldQuaternion(_tmpQ);
+  _tmpQ.invert();
+  const localDir = targetWorldDir.clone().applyQuaternion(_tmpQ);
+  if(localDir.lengthSq() < 1e-8) return;
+  localDir.normalize();
+  bone.quaternion.setFromUnitVectors(RESTY, localDir);
+  bone.updateWorldMatrix(true, false);
+}
+
+function applyPoseToSkeleton(worldLandmarks){
+  for(const [boneName, pIdx, cIdx] of BONE_CHAINS){
+    const bone = bones[boneName];
+    if(!bone) continue;
+    const p = worldLandmarks[pIdx], c = worldLandmarks[cIdx];
+    if(!p || !c) continue;
+    if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN) ||
+       (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN)) continue;
+    const dir = mpVec(c).sub(mpVec(p));
+    if(dir.lengthSq() < 1e-8) continue;
+    pointBoneTo(bone, dir.normalize());
+  }
+}
+
+function updatePlacementAndPose(){
   const fine = parseFloat(rFine.value);
   const depth = parseFloat(rDepth.value);
   const height = parseFloat(rHeight.value);
@@ -604,107 +557,22 @@ function applyCalibratedMatrix(){
     );
   }
 
-  let liveFaceWidthNDC = null;
-  let liveDepth = null;
-  if(lastFaceLandmarks && lastFaceLandmarks[CHEEK_L] && lastFaceLandmarks[CHEEK_R]){
-    const lm = lastFaceLandmarks;
-    liveFaceWidthNDC = Math.abs((lm[CHEEK_R].x*2-1) - (lm[CHEEK_L].x*2-1));
-    smoothedFaceWidthNDC = (smoothedFaceWidthNDC === null)
-      ? liveFaceWidthNDC
-      : smoothedFaceWidthNDC + (liveFaceWidthNDC - smoothedFaceWidthNDC) * 0.15;
-  }
-  if(trackingReady && lastMatrixData){
-    liveDepth = Math.abs(lastMatrixData[14]) || null;
-  }
-
-  let liveShoulderWidthNDC = null;
-  if(lastPoseLandmarks && lastPoseLandmarks[SHOULDER_L] && lastPoseLandmarks[SHOULDER_R]){
-    const lm = lastPoseLandmarks;
-    const l = lm[SHOULDER_L], r = lm[SHOULDER_R];
-    const visOk = (l.visibility === undefined || l.visibility >= POSE_VISIBILITY_MIN)
-               && (r.visibility === undefined || r.visibility >= POSE_VISIBILITY_MIN);
-    if(visOk){
-      liveShoulderWidthNDC = Math.abs((r.x*2-1) - (l.x*2-1));
-      smoothedShoulderWidthNDC = (smoothedShoulderWidthNDC === null)
-        ? liveShoulderWidthNDC
-        : smoothedShoulderWidthNDC + (liveShoulderWidthNDC - smoothedShoulderWidthNDC) * 0.15;
+  // Live scale: compare real metric shoulder width (from PoseLandmarker
+  // world landmarks) against the suit's own bind-pose shoulder width. No
+  // multi-frame calibration lock needed — both sides are already in meters.
+  let haveLiveScale = false;
+  if(lastPoseWorldLandmarks && restShoulderWidth){
+    const l = lastPoseWorldLandmarks[SHOULDER_L], r = lastPoseWorldLandmarks[SHOULDER_R];
+    if(l && r && (l.visibility===undefined || l.visibility>=POSE_VISIBILITY_MIN) && (r.visibility===undefined || r.visibility>=POSE_VISIBILITY_MIN)){
+      const liveShoulderWidth = mpVec(l).distanceTo(mpVec(r));
+      const targetScale = (liveShoulderWidth / restShoulderWidth) * SCALE_BOOST;
+      smoothedScale = (smoothedScale === null) ? targetScale : smoothedScale + (targetScale - smoothedScale) * 0.15;
+      haveLiveScale = true;
     }
   }
+  statusDot.className = haveLiveScale ? 'status-dot locked' : 'status-dot fitting';
 
-  if(!isCalibrated && maskHalfExtents && liveFaceWidthNDC !== null){
-    const maskWidthNDC = projectedMaskWidthNDC(base);
-    let shoulderRatio = null, shoulderWidthSample = null;
-    if(shoulderLocalCenter && shoulderLocalHalf && liveShoulderWidthNDC !== null){
-      const shoulderMaskWidthNDC = projectedRegionWidthNDC(base, shoulderLocalCenter, shoulderLocalHalf);
-      if(shoulderMaskWidthNDC > 0.0001 && isFinite(shoulderMaskWidthNDC)){
-        shoulderRatio = liveShoulderWidthNDC / shoulderMaskWidthNDC;
-        shoulderWidthSample = liveShoulderWidthNDC;
-      }
-    }
-    if(maskWidthNDC > 0.0001 && isFinite(maskWidthNDC)){
-      calibrationSamples.push({
-        ratio: liveFaceWidthNDC / maskWidthNDC,
-        width: liveFaceWidthNDC,
-        metric: liveDepth ? liveFaceWidthNDC * liveDepth : null,
-        shoulderRatio,
-        shoulderWidth: shoulderWidthSample
-      });
-      statusDot.className = 'status-dot fitting';
-      if(calibrationSamples.length >= CALIBRATION_FRAMES){
-        const ratios = calibrationSamples.map(s=>s.ratio).sort((a,b)=>a-b);
-        const widths = calibrationSamples.map(s=>s.width).sort((a,b)=>a-b);
-        const metrics = calibrationSamples.map(s=>s.metric).filter(m=>m!==null).sort((a,b)=>a-b);
-        const shoulderRatios = calibrationSamples.map(s=>s.shoulderRatio).filter(r=>r!==null).sort((a,b)=>a-b);
-        const shoulderWidths = calibrationSamples.map(s=>s.shoulderWidth).filter(w=>w!==null).sort((a,b)=>a-b);
-
-        const faceMedianRatio = ratios[Math.floor(ratios.length/2)];
-        baselineFaceWidthNDC = widths[Math.floor(widths.length/2)];
-        baselineMetricProxy = metrics.length ? metrics[Math.floor(metrics.length/2)] : null;
-
-        // Body-tracked shoulder width, when available, is a steadier scale
-        // reference than face width alone (it doesn't shrink when you turn
-        // your head), so blend the two 50/50 rather than trusting face only.
-        if(shoulderRatios.length >= CALIBRATION_FRAMES * 0.5){
-          const shoulderMedianRatio = shoulderRatios[Math.floor(shoulderRatios.length/2)];
-          baselineShoulderWidthNDC = shoulderWidths[Math.floor(shoulderWidths.length/2)];
-          autoScale = (faceMedianRatio + shoulderMedianRatio) / 2;
-        } else {
-          baselineShoulderWidthNDC = null;
-          autoScale = faceMedianRatio;
-        }
-        isCalibrated = true;
-        mismatchStreak = 0;
-      }
-    }
-  }
-
-  let liveRatio = 1;
-  if(isCalibrated && baselineFaceWidthNDC && smoothedFaceWidthNDC !== null){
-    const faceLiveRatio = smoothedFaceWidthNDC / baselineFaceWidthNDC;
-    if(baselineShoulderWidthNDC && smoothedShoulderWidthNDC !== null){
-      const shoulderLiveRatio = smoothedShoulderWidthNDC / baselineShoulderWidthNDC;
-      liveRatio = (faceLiveRatio + shoulderLiveRatio) / 2;
-    } else {
-      liveRatio = faceLiveRatio;
-    }
-    statusDot.className = 'status-dot locked';
-  }
-
-  if(autoRefit && isCalibrated && baselineMetricProxy && liveDepth && smoothedFaceWidthNDC !== null){
-    const liveMetric = smoothedFaceWidthNDC * liveDepth;
-    const dev = Math.abs(liveMetric - baselineMetricProxy) / baselineMetricProxy;
-    if(dev > REFIT_MISMATCH_RATIO){
-      mismatchStreak++;
-      if(mismatchStreak >= REFIT_MISMATCH_FRAMES){
-        startRecalibration();
-        return;
-      }
-    } else {
-      mismatchStreak = 0;
-    }
-  }
-
-  const finalScale = autoScale * liveRatio * fine * SCALE_BOOST;
+  const finalScale = (smoothedScale !== null ? smoothedScale : SCALE_BOOST) * fine;
   const flipYaw = flip180 ? Math.PI : 0;
   const calib = new THREE.Matrix4();
   calib.compose(
@@ -714,6 +582,12 @@ function applyCalibratedMatrix(){
   );
 
   maskGroup.matrix.copy(base).multiply(calib);
+  maskGroup.matrixWorldNeedsUpdate = true;
+  maskGroup.updateMatrixWorld(true);
+
+  if(poseRetargetEnabled && lastPoseWorldLandmarks && bonesReady){
+    applyPoseToSkeleton(lastPoseWorldLandmarks);
+  }
 }
 
 async function loop(){
@@ -730,6 +604,9 @@ async function loop(){
     if(poseResults.landmarks && poseResults.landmarks.length){
       lastPoseLandmarks = poseResults.landmarks[0];
     }
+    if(poseResults.worldLandmarks && poseResults.worldLandmarks.length){
+      lastPoseWorldLandmarks = poseResults.worldLandmarks[0];
+    }
   }
   if(handTrackingReady && handLandmarker && video.readyState >= 2){
     const handResults = handLandmarker.detectForVideo(video, now);
@@ -740,8 +617,8 @@ async function loop(){
 
   drawTrackingDots();
 
-  if(maskGroup && maskHalfExtents){
-    applyCalibratedMatrix();
+  if(maskGroup && bonesReady){
+    updatePlacementAndPose();
     renderer.render(scene, camera);
   }
   requestAnimationFrame(loop);
@@ -776,13 +653,16 @@ function drawTrackingDots(){
       dotsCtx.arc(x, y, 4, 0, Math.PI*2);
       dotsCtx.fill();
     }
-    const l = lastPoseLandmarks[SHOULDER_L], r = lastPoseLandmarks[SHOULDER_R];
-    if(l && r){
-      dotsCtx.strokeStyle = '#138808';
-      dotsCtx.lineWidth = 2;
+    dotsCtx.strokeStyle = '#138808';
+    dotsCtx.lineWidth = 2;
+    const bonesToDraw = [[SHOULDER_L,SHOULDER_R],[SHOULDER_L,ELBOW_L],[ELBOW_L,WRIST_L],[SHOULDER_R,ELBOW_R],[ELBOW_R,WRIST_R],[HIP_L,HIP_R],[HIP_L,KNEE_L],[KNEE_L,ANKLE_L],[HIP_R,KNEE_R],[KNEE_R,ANKLE_R],[SHOULDER_L,HIP_L],[SHOULDER_R,HIP_R]];
+    for(const [a,b] of bonesToDraw){
+      const la = lastPoseLandmarks[a], lb = lastPoseLandmarks[b];
+      if(!la || !lb) continue;
+      if((la.visibility!==undefined && la.visibility<POSE_VISIBILITY_MIN) || (lb.visibility!==undefined && lb.visibility<POSE_VISIBILITY_MIN)) continue;
       dotsCtx.beginPath();
-      dotsCtx.moveTo(l.x*dotsCanvas.width, l.y*dotsCanvas.height);
-      dotsCtx.lineTo(r.x*dotsCanvas.width, r.y*dotsCanvas.height);
+      dotsCtx.moveTo(la.x*dotsCanvas.width, la.y*dotsCanvas.height);
+      dotsCtx.lineTo(lb.x*dotsCanvas.width, lb.y*dotsCanvas.height);
       dotsCtx.stroke();
     }
   }
@@ -830,12 +710,16 @@ snapBtn.addEventListener('click', ()=>{
   };
 });
 
-recalBtn.addEventListener('click', startRecalibration);
+// Repurposed for the new system: just resets the scale smoothing so it
+// snaps to the current live shoulder width quickly, useful if tracking
+// glitched and the size drifted.
+recalBtn.addEventListener('click', ()=>{
+  smoothedScale = null;
+});
 
 flipBtn.addEventListener('click', ()=>{
   flip180 = !flip180;
   flipBtn.classList.toggle('active', flip180);
-  startRecalibration();
 });
 
 dotsBtn.addEventListener('click', ()=>{
@@ -843,9 +727,13 @@ dotsBtn.addEventListener('click', ()=>{
   dotsBtn.classList.toggle('active', showDots);
 });
 
-autoRefitBtn.addEventListener('click', ()=>{
-  autoRefit = !autoRefit;
-  autoRefitBtn.classList.toggle('active', autoRefit);
+// Toggles whether pose data drives the limbs at all. Off = suit stays in
+// its authored bind pose (arms/legs static) but still follows your head via
+// the face-tracking matrix, same as the old rigid behavior — useful as a
+// fallback if pose tracking is unavailable or misbehaving.
+poseRetargetBtn.addEventListener('click', ()=>{
+  poseRetargetEnabled = !poseRetargetEnabled;
+  poseRetargetBtn.classList.toggle('active', poseRetargetEnabled);
 });
 
 function openSheet(){ sheet.classList.add('open'); sheetBackdrop.classList.add('open'); }
