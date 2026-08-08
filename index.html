@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lens Demo — Oni Mask AR</title>
+<style>
+  :root{
+    --ink:#0d0f0c;
+    --panel:#15180f;
+    --focus:#c4ff4d;
+    --focus-dim:#7c9f3a;
+    --warn:#ff6b4d;
+    --paper:#eef0e6;
+    --mono:'IBM Plex Mono', 'Courier New', monospace;
+    --sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);min-height:100%;}
+  .rig{max-width:520px;margin:0 auto;padding:18px 16px 28px;}
+  .masthead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;font-family:var(--mono);letter-spacing:0.04em;}
+  .masthead .rec{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--focus-dim);}
+  .rec .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
+  .masthead h1{font-size:14px;margin:0;font-weight:600;color:var(--paper);}
+  .viewfinder{position:relative;width:100%;background:#000;border-radius:2px;overflow:hidden;border:1px solid #2a2e1f;}
+  .viewfinder video{width:100%;height:100%;object-fit:contain;transform:scaleX(-1);display:block;background:#000;}
+  .viewfinder canvas.gl{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;}
+  .viewfinder canvas.dots{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;z-index:3;}
+  .corner{position:absolute;width:18px;height:18px;border:1.5px solid var(--focus);opacity:0.85;pointer-events:none;z-index:4;}
+  .corner.tl{top:10px;left:10px;border-right:none;border-bottom:none;}
+  .corner.tr{top:10px;right:10px;border-left:none;border-bottom:none;}
+  .corner.bl{bottom:10px;left:10px;border-right:none;border-top:none;}
+  .corner.br{bottom:10px;right:10px;border-left:none;border-top:none;}
+  .readout{position:absolute;bottom:10px;left:14px;font-family:var(--mono);font-size:10px;color:var(--focus);letter-spacing:0.05em;text-shadow:0 1px 2px rgba(0,0,0,0.6);z-index:5;}
+  .status-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-family:var(--mono);font-size:12px;color:var(--focus-dim);background:rgba(13,15,12,0.8);z-index:6;}
+  .status-overlay.hidden{display:none;}
+  .panel{background:var(--panel);border:1px solid #2a2e1f;border-radius:2px;margin-top:12px;padding:12px 14px;}
+  .panel summary{font-family:var(--mono);font-size:11px;letter-spacing:0.04em;color:var(--focus-dim);cursor:pointer;}
+  .slider-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
+  .slider-row label{font-family:var(--mono);font-size:10px;width:64px;flex:0 0 64px;color:#9aa08a;}
+  .slider-row input[type=range]{flex:1;accent-color:var(--focus);}
+  .controls{display:flex;gap:10px;margin-top:14px;}
+  .main-btn{flex:1;background:var(--focus);color:var(--ink);border:none;font-family:var(--sans);font-weight:700;font-size:13px;padding:13px;border-radius:2px;cursor:pointer;letter-spacing:0.01em;}
+  .main-btn:active{transform:translateY(1px);}
+  .ghost-btn{background:transparent;border:1px solid #2a2e1f;color:var(--paper);font-family:var(--sans);font-size:13px;padding:13px 16px;border-radius:2px;cursor:pointer;}
+  .footnote{margin-top:16px;font-family:var(--mono);font-size:10px;color:#5a5f4e;line-height:1.6;letter-spacing:0.02em;}
+</style>
+</head>
+<body>
+
+<div class="rig">
+  <div class="masthead">
+    <h1>LENS · ONI MASK</h1>
+    <div class="rec"><span class="dot"></span>LIVE PREVIEW</div>
+  </div>
+
+  <div class="viewfinder" id="viewfinder">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas class="gl" id="glCanvas"></canvas>
+    <canvas class="dots" id="dotsCanvas"></canvas>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+    <div class="readout" id="readout">TRACKING: —</div>
+    <div class="status-overlay" id="status">Requesting camera access…</div>
+  </div>
+
+  <details class="panel" open>
+    <summary>TRACKING</summary>
+    <div class="slider-row"><label>Points</label>
+      <label style="width:auto;flex:1;display:flex;align-items:center;gap:6px;color:var(--paper);font-family:var(--sans);font-size:12px;">
+        <input type="checkbox" id="cShowDots" checked style="accent-color:var(--focus);"> show tracking marks
+      </label>
+    </div>
+    <div class="slider-row"><label></label>
+      <button class="ghost-btn" id="recalBtn" style="width:100%;padding:8px;">Recalibrate mask size</button>
+    </div>
+  </details>
+
+  <details class="panel">
+    <summary>FINE-TUNE (optional — sizing is automatic)</summary>
+    <div class="slider-row"><label>Size ×</label><input type="range" id="rFine" min="0.5" max="2" step="0.01" value="1"></div>
+    <div class="slider-row"><label>Depth</label><input type="range" id="rDepth" min="-40" max="40" step="0.5" value="0"></div>
+    <div class="slider-row"><label>Height</label><input type="range" id="rHeight" min="-40" max="40" step="0.5" value="0"></div>
+    <div class="slider-row"><label>Tilt</label><input type="range" id="rTilt" min="-45" max="45" step="1" value="0"></div>
+  </details>
+
+  <div class="controls">
+    <button class="main-btn" id="snapBtn">Capture frame</button>
+    <button class="ghost-btn" id="downloadBtn" style="display:none;">Save</button>
+  </div>
+
+  <div class="footnote">
+    PROOF OF CONCEPT — tracks the face in 3D (position, rotation, depth) using on-device face
+    mesh tracking, then renders the uploaded mask model locked to the head. It calibrates a
+    baseline fit over the first second a face is seen, then keeps scaling live off the actual
+    tracked marks after that — if the face gets closer, farther, or a different person puts it on,
+    the mask resizes to match, smoothed so it doesn't flicker frame to frame. Hit "Recalibrate mask
+    size" to reset the baseline at any point. Toggle "show tracking marks" to see the live landmark
+    points the mask's size and position are following. If tracking can't load (slow network,
+    unsupported browser), the mask still renders and can be positioned by dragging.
+    <br><br>
+    IMPORTANT: don't open this file by double-clicking it — browsers block a local HTML file from
+    loading the .glb next to it that way. Instead, from the folder containing both files, run a
+    tiny local server and open the printed address, e.g.: <b>python3 -m http.server 8000</b> then
+    visit <b>http://localhost:8000/lens-demo-3d.html</b>. (Once this is embedded on Wix itself,
+    this issue goes away — Wix serves everything over normal HTTPS.)
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+const video = document.getElementById('video');
+const glCanvas = document.getElementById('glCanvas');
+const dotsCanvas = document.getElementById('dotsCanvas');
+const dotsCtx = dotsCanvas.getContext('2d');
+const viewfinder = document.getElementById('viewfinder');
+const statusEl = document.getElementById('status');
+const readout = document.getElementById('readout');
+const snapBtn = document.getElementById('snapBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const cShowDots = document.getElementById('cShowDots');
+const recalBtn = document.getElementById('recalBtn');
+const rFine = document.getElementById('rFine');
+const rDepth = document.getElementById('rDepth');
+const rHeight = document.getElementById('rHeight');
+const rTilt = document.getElementById('rTilt');
+
+let faceLandmarker = null;
+let trackingReady = false;
+let usingFallback = false;
+let lastMatrixData = null;
+let lastFaceLandmarks = null;
+let renderer, scene, camera, maskGroup, maskModel;
+let maskHalfExtents = null;
+let autoScale = 1;
+let calibrationSamples = [];
+let isCalibrated = false;
+let baselineFaceWidthNDC = null;
+let smoothedFaceWidthNDC = null;
+const CALIBRATION_FRAMES = 40;
+const CHEEK_L = 234, CHEEK_R = 454;
+// A handful of landmark indices used just to draw visible tracking marks:
+// cheeks, nose tip, chin, forehead, outer eye corners.
+const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
+let dragging = false, dragStart = {x:0,y:0};
+let manualOffset = {x:0, y:0};
+
+function setViewfinderAspect(w, h){
+  viewfinder.style.aspectRatio = `${w} / ${h}`;
+  dotsCanvas.width = w;
+  dotsCanvas.height = h;
+}
+
+function startRecalibration(){
+  calibrationSamples = [];
+  isCalibrated = false;
+  baselineFaceWidthNDC = null;
+  smoothedFaceWidthNDC = null;
+}
+
+async function startCamera(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width:{ideal:640}, height:{ideal:480} }, audio:false });
+    video.srcObject = stream;
+    await new Promise(res=> video.onloadedmetadata = res);
+    setViewfinderAspect(video.videoWidth, video.videoHeight);
+    initThree();
+    statusEl.textContent = 'Loading face tracking + mask…';
+    await Promise.all([loadTracking(), loadMask()]);
+    statusEl.classList.add('hidden');
+    requestAnimationFrame(loop);
+  }catch(err){
+    statusEl.innerHTML = "Camera access was blocked or unavailable.<br>Check the browser's camera permission and reload.";
+  }
+}
+
+function initThree(){
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha:true, antialias:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(video.videoWidth, video.videoHeight, false);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(63, video.videoWidth/video.videoHeight, 1, 5000);
+  camera.position.set(0,0,0);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a2a, 1.1));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.4);
+  dir.position.set(0, 80, 150);
+  scene.add(dir);
+
+  maskGroup = new THREE.Group();
+  maskGroup.matrixAutoUpdate = false;
+  scene.add(maskGroup);
+}
+
+async function loadTracking(){
+  try{
+    const filesetResolver = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate: "GPU"
+      },
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: true,
+      runningMode: "VIDEO",
+      numFaces: 1
+    });
+    trackingReady = true;
+    readout.textContent = 'TRACKING: 3D FACE MESH (AUTO)';
+  }catch(e){
+    usingFallback = true;
+    readout.textContent = 'TRACKING: MANUAL (DRAG)';
+    enableDragFallback();
+  }
+}
+
+function loadMask(){
+  return new Promise((resolve)=>{
+    const loader = new GLTFLoader();
+    loader.load('./oni_no_face_mask.glb', (gltf)=>{
+      maskModel = gltf.scene;
+      maskModel.traverse(o=>{ if(o.isMesh){ o.frustumCulled = false; } });
+      maskGroup.add(maskModel);
+
+      // Auto-recenter: shift the model so its bounding-box center sits at the
+      // pivot origin, so scale/rotation happen around the middle of the mask
+      // rather than wherever the artist happened to place the origin.
+      const box = new THREE.Box3().setFromObject(maskModel);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      maskModel.position.sub(center);
+      maskHalfExtents = size.multiplyScalar(0.5);
+
+      resolve();
+    }, undefined, (err)=>{
+      console.error('mask load failed', err);
+      statusEl.classList.remove('hidden');
+      statusEl.innerHTML = "Couldn't load the mask file (oni_no_face_mask.glb).<br>" +
+        "If you opened this file by double-clicking it, your browser is blocking local file access.<br>" +
+        "Run it from a local server instead — see the note below the demo.";
+      resolve();
+    });
+  });
+}
+
+function enableDragFallback(){
+  glCanvas.style.pointerEvents = 'auto';
+  const start = (x,y)=>{ dragging = true; dragStart = {x,y, ox:manualOffset.x, oy:manualOffset.y}; };
+  const move = (x,y)=>{
+    if(!dragging) return;
+    manualOffset.x = dragStart.ox + (x - dragStart.x) * 0.4;
+    manualOffset.y = dragStart.oy - (y - dragStart.y) * 0.4;
+  };
+  glCanvas.addEventListener('pointerdown', e=> start(e.clientX, e.clientY));
+  window.addEventListener('pointermove', e=> move(e.clientX, e.clientY));
+  window.addEventListener('pointerup', ()=> dragging = false);
+}
+
+// Projects the mask's 8 bounding-box corners (at a given world matrix) through
+// the camera and returns how wide the mask appears in normalized device space.
+function projectedMaskWidthNDC(worldMatrix){
+  const h = maskHalfExtents;
+  const corners = [
+    [ h.x, h.y, h.z], [-h.x, h.y, h.z], [ h.x,-h.y, h.z], [-h.x,-h.y, h.z],
+    [ h.x, h.y,-h.z], [-h.x, h.y,-h.z], [ h.x,-h.y,-h.z], [-h.x,-h.y,-h.z]
+  ];
+  let minX = Infinity, maxX = -Infinity;
+  const v = new THREE.Vector3();
+  for(const c of corners){
+    v.set(c[0], c[1], c[2]).applyMatrix4(worldMatrix).project(camera);
+    if(v.x < minX) minX = v.x;
+    if(v.x > maxX) maxX = v.x;
+  }
+  return maxX - minX;
+}
+
+function applyCalibratedMatrix(){
+  const fine = parseFloat(rFine.value);
+  const depth = parseFloat(rDepth.value);
+  const height = parseFloat(rHeight.value);
+  const tilt = THREE.MathUtils.degToRad(parseFloat(rTilt.value));
+
+  const base = new THREE.Matrix4();
+  if(trackingReady && lastMatrixData){
+    base.fromArray(lastMatrixData);
+  } else {
+    base.compose(
+      new THREE.Vector3(manualOffset.x, manualOffset.y, -300),
+      new THREE.Quaternion(),
+      new THREE.Vector3(1,1,1)
+    );
+  }
+
+  // Live face width from the actual tracked marks (cheek landmarks), each frame.
+  let liveFaceWidthNDC = null;
+  if(lastFaceLandmarks && lastFaceLandmarks[CHEEK_L] && lastFaceLandmarks[CHEEK_R]){
+    const lm = lastFaceLandmarks;
+    liveFaceWidthNDC = Math.abs((lm[CHEEK_R].x*2-1) - (lm[CHEEK_L].x*2-1));
+    // Smooth so single-frame landmark noise doesn't make the mask visibly
+    // pulse in size, while still tracking real changes (moving closer/farther,
+    // a different face) within a few frames.
+    smoothedFaceWidthNDC = (smoothedFaceWidthNDC === null)
+      ? liveFaceWidthNDC
+      : smoothedFaceWidthNDC + (liveFaceWidthNDC - smoothedFaceWidthNDC) * 0.08;
+  }
+
+  // Calibration: for the first CALIBRATION_FRAMES frames after a face is seen,
+  // sample what scale makes the mask's projected width match the real face
+  // width, AND record the face width itself as the baseline. Take the median
+  // of both (robust to noisy single-frame jitter) once enough samples exist.
+  if(!isCalibrated && maskHalfExtents && liveFaceWidthNDC !== null){
+    const maskWidthNDC = projectedMaskWidthNDC(base);
+    if(maskWidthNDC > 0.0001 && isFinite(maskWidthNDC)){
+      calibrationSamples.push({ ratio: liveFaceWidthNDC / maskWidthNDC, width: liveFaceWidthNDC });
+      readout.textContent = `TRACKING: 3D FACE MESH — CALIBRATING (${calibrationSamples.length}/${CALIBRATION_FRAMES})…`;
+      if(calibrationSamples.length >= CALIBRATION_FRAMES){
+        const ratios = calibrationSamples.map(s=>s.ratio).sort((a,b)=>a-b);
+        const widths = calibrationSamples.map(s=>s.width).sort((a,b)=>a-b);
+        autoScale = ratios[Math.floor(ratios.length/2)];
+        baselineFaceWidthNDC = widths[Math.floor(widths.length/2)];
+        isCalibrated = true;
+      }
+    }
+  }
+
+  // Once calibrated, keep scaling live off the actual tracked marks: if the
+  // face is currently wider/narrower on screen than it was at calibration time
+  // (closer, farther, a different person), scale proportionally to match.
+  let liveRatio = 1;
+  if(isCalibrated && baselineFaceWidthNDC && smoothedFaceWidthNDC !== null){
+    liveRatio = smoothedFaceWidthNDC / baselineFaceWidthNDC;
+    readout.textContent = 'TRACKING: 3D FACE MESH (FOLLOWING MARKS)';
+  }
+
+  const finalScale = autoScale * liveRatio * fine;
+  const calib = new THREE.Matrix4();
+  calib.compose(
+    new THREE.Vector3(0, height, depth),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt,0,0)),
+    new THREE.Vector3(finalScale, finalScale, finalScale)
+  );
+
+  maskGroup.matrix.copy(base).multiply(calib);
+}
+
+async function loop(){
+  if(trackingReady && faceLandmarker && video.readyState >= 2){
+    const results = faceLandmarker.detectForVideo(video, performance.now());
+    if(results.facialTransformationMatrixes && results.facialTransformationMatrixes.length){
+      lastMatrixData = results.facialTransformationMatrixes[0].data;
+      lastFaceLandmarks = (results.faceLandmarks && results.faceLandmarks[0]) || lastFaceLandmarks;
+    } else {
+      readout.textContent = 'TRACKING: 3D FACE MESH (SEARCHING…)';
+    }
+  }
+
+  drawTrackingDots();
+
+  if(maskGroup){
+    applyCalibratedMatrix();
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(loop);
+}
+
+function drawTrackingDots(){
+  dotsCtx.clearRect(0,0,dotsCanvas.width, dotsCanvas.height);
+  if(!cShowDots.checked || !lastFaceLandmarks) return;
+  dotsCtx.fillStyle = '#c4ff4d';
+  dotsCtx.strokeStyle = 'rgba(196,255,77,0.5)';
+  const pts = [];
+  for(const idx of MARK_POINTS){
+    const lm = lastFaceLandmarks[idx];
+    if(!lm) continue;
+    const x = lm.x * dotsCanvas.width;
+    const y = lm.y * dotsCanvas.height;
+    pts.push([x,y]);
+    dotsCtx.beginPath();
+    dotsCtx.arc(x, y, 3, 0, Math.PI*2);
+    dotsCtx.fill();
+  }
+}
+
+snapBtn.addEventListener('click', ()=>{
+  const shot = document.createElement('canvas');
+  shot.width = video.videoWidth;
+  shot.height = video.videoHeight;
+  const sctx = shot.getContext('2d');
+  sctx.translate(shot.width, 0);
+  sctx.scale(-1,1);
+  sctx.drawImage(video, 0, 0, shot.width, shot.height);
+  sctx.drawImage(glCanvas, 0, 0, shot.width, shot.height);
+  sctx.setTransform(1,0,0,1,0,0);
+  const dataUrl = shot.toDataURL('image/png');
+  downloadBtn.style.display = 'inline-block';
+  downloadBtn.onclick = ()=>{
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = 'oni-lens-capture.png';
+    a.click();
+  };
+  downloadBtn.textContent = 'Download capture';
+});
+
+recalBtn.addEventListener('click', startRecalibration);
+
+startCamera();
+</script>
+</body>
+</html>
