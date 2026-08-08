@@ -259,13 +259,20 @@ const WRIST_L = 15, WRIST_R = 16;
 const HIP_L = 23, HIP_R = 24;
 const KNEE_L = 25, KNEE_R = 26;
 const ANKLE_L = 27, ANKLE_R = 28;
-const POSE_MARK_POINTS = [SHOULDER_L, SHOULDER_R, HIP_L, HIP_R, ELBOW_L, ELBOW_R, WRIST_L, WRIST_R, KNEE_L, KNEE_R, ANKLE_L, ANKLE_R];
+const FOOT_INDEX_L = 31, FOOT_INDEX_R = 32;
+const POSE_MARK_POINTS = [SHOULDER_L, SHOULDER_R, HIP_L, HIP_R, ELBOW_L, ELBOW_R, WRIST_L, WRIST_R, KNEE_L, KNEE_R, ANKLE_L, ANKLE_R, FOOT_INDEX_L, FOOT_INDEX_R];
 const POSE_VISIBILITY_MIN = 0.5;
 
 // Each entry: [bone name (mixamorig: prefix stripped), parent landmark idx, child landmark idx].
 // The bone's local +Y axis points at its child in the bind pose (confirmed
 // from the exported GLB's joint translations), so pointBoneTo() below aligns
 // local +Y to the live parent→child direction.
+//
+// LeftFoot/RightFoot added to match the actual rigged skeleton — the GLB's
+// node hierarchy has LeftFoot/RightFoot bones (children of LeftLeg/RightLeg)
+// and BlazePose's world landmarks include a foot-index point (31/32) past
+// the ankle, so the same parent→child pattern used for the other limbs
+// covers them directly.
 const BONE_CHAINS = [
   ['LeftArm', SHOULDER_L, ELBOW_L],
   ['LeftForeArm', ELBOW_L, WRIST_L],
@@ -275,6 +282,8 @@ const BONE_CHAINS = [
   ['LeftLeg', KNEE_L, ANKLE_L],
   ['RightUpLeg', HIP_R, KNEE_R],
   ['RightLeg', KNEE_R, ANKLE_R],
+  ['LeftFoot', ANKLE_L, FOOT_INDEX_L],
+  ['RightFoot', ANKLE_R, FOOT_INDEX_R],
 ];
 
 // Hand tracking — up to 2 hands, 21 landmarks each (not yet wired to the
@@ -514,7 +523,8 @@ const RESTY = new THREE.Vector3(0,1,0);
 // along `targetWorldDir` (a world-space-aligned direction — see mpVec).
 // Requires bone.parent's matrixWorld to already reflect any rotation set
 // earlier this frame (we call updateWorldMatrix immediately after setting
-// each bone, so chains resolve top-down: Arm before ForeArm, etc).
+// each bone, so chains resolve top-down: Arm before ForeArm, UpLeg before
+// Leg before Foot, etc).
 function pointBoneTo(bone, targetWorldDir){
   bone.parent.updateWorldMatrix(true, false);
   bone.parent.getWorldQuaternion(_tmpQ);
@@ -655,7 +665,7 @@ function drawTrackingDots(){
     }
     dotsCtx.strokeStyle = '#138808';
     dotsCtx.lineWidth = 2;
-    const bonesToDraw = [[SHOULDER_L,SHOULDER_R],[SHOULDER_L,ELBOW_L],[ELBOW_L,WRIST_L],[SHOULDER_R,ELBOW_R],[ELBOW_R,WRIST_R],[HIP_L,HIP_R],[HIP_L,KNEE_L],[KNEE_L,ANKLE_L],[HIP_R,KNEE_R],[KNEE_R,ANKLE_R],[SHOULDER_L,HIP_L],[SHOULDER_R,HIP_R]];
+    const bonesToDraw = [[SHOULDER_L,SHOULDER_R],[SHOULDER_L,ELBOW_L],[ELBOW_L,WRIST_L],[SHOULDER_R,ELBOW_R],[ELBOW_R,WRIST_R],[HIP_L,HIP_R],[HIP_L,KNEE_L],[KNEE_L,ANKLE_L],[HIP_R,KNEE_R],[KNEE_R,ANKLE_R],[SHOULDER_L,HIP_L],[SHOULDER_R,HIP_R],[ANKLE_L,FOOT_INDEX_L],[ANKLE_R,FOOT_INDEX_R]];
     for(const [a,b] of bonesToDraw){
       const la = lastPoseLandmarks[a], lb = lastPoseLandmarks[b];
       if(!la || !lb) continue;
