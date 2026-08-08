@@ -158,7 +158,7 @@
 }
 </script>
 <script type="module">
-import { FaceLandmarker, PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+import { FaceLandmarker, PoseLandmarker, HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
@@ -256,6 +256,19 @@ let lastPoseLandmarks = null;
 const SHOULDER_L = 11, SHOULDER_R = 12, HIP_L = 23, HIP_R = 24;
 const POSE_MARK_POINTS = [SHOULDER_L, SHOULDER_R, HIP_L, HIP_R];
 const POSE_VISIBILITY_MIN = 0.5;
+
+// Hand tracking — up to 2 hands, 21 landmarks each (MediaPipe hand model).
+let handLandmarker = null;
+let handTrackingReady = false;
+let lastHandLandmarks = [];   // array of hands, each an array of 21 landmarks
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],           // thumb
+  [0,5],[5,6],[6,7],[7,8],           // index
+  [5,9],[9,10],[10,11],[11,12],      // middle
+  [9,13],[13,14],[14,15],[15,16],    // ring
+  [13,17],[17,18],[18,19],[19,20],   // pinky
+  [0,17]                             // palm base
+];
 let dragging = false, dragStart = {x:0,y:0};
 let manualOffset = {x:0, y:0};
 let cameraStarted = false;
@@ -379,6 +392,21 @@ async function loadTracking(){
   }catch(e){
     console.warn('pose tracking unavailable, falling back to face-only fit', e);
     poseTrackingReady = false;
+  }
+
+  try{
+    handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        delegate: "GPU"
+      },
+      runningMode: "VIDEO",
+      numHands: 2
+    });
+    handTrackingReady = true;
+  }catch(e){
+    console.warn('hand tracking unavailable', e);
+    handTrackingReady = false;
   }
 }
 
@@ -703,6 +731,12 @@ async function loop(){
       lastPoseLandmarks = poseResults.landmarks[0];
     }
   }
+  if(handTrackingReady && handLandmarker && video.readyState >= 2){
+    const handResults = handLandmarker.detectForVideo(video, now);
+    if(handResults.landmarks){
+      lastHandLandmarks = handResults.landmarks;
+    }
+  }
 
   drawTrackingDots();
 
@@ -750,6 +784,27 @@ function drawTrackingDots(){
       dotsCtx.moveTo(l.x*dotsCanvas.width, l.y*dotsCanvas.height);
       dotsCtx.lineTo(r.x*dotsCanvas.width, r.y*dotsCanvas.height);
       dotsCtx.stroke();
+    }
+  }
+
+  if(lastHandLandmarks && lastHandLandmarks.length){
+    for(const hand of lastHandLandmarks){
+      dotsCtx.strokeStyle = '#FFFFFF';
+      dotsCtx.lineWidth = 1.5;
+      for(const [a,b] of HAND_CONNECTIONS){
+        const pa = hand[a], pb = hand[b];
+        if(!pa || !pb) continue;
+        dotsCtx.beginPath();
+        dotsCtx.moveTo(pa.x*dotsCanvas.width, pa.y*dotsCanvas.height);
+        dotsCtx.lineTo(pb.x*dotsCanvas.width, pb.y*dotsCanvas.height);
+        dotsCtx.stroke();
+      }
+      dotsCtx.fillStyle = '#0b1f6b';
+      for(const lm of hand){
+        dotsCtx.beginPath();
+        dotsCtx.arc(lm.x*dotsCanvas.width, lm.y*dotsCanvas.height, 2.5, 0, Math.PI*2);
+        dotsCtx.fill();
+      }
     }
   }
 }
