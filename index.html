@@ -273,6 +273,21 @@ let bonesReady = false;
 let restShoulderWidth = null; // bind-pose LeftArm↔RightArm distance, in the model's own (metric) units
 let smoothedScale = null;
 
+// Upper-arm (shoulder→elbow) stretch, so the sleeve's LENGTH tracks your
+// real arm instead of stopping short at the suit's bind-pose proportions.
+// Scoped to ONLY LeftArm/RightArm this time — NOT chained into ForeArm/Hand
+// like the earlier attempt, which is what caused the candy-wrapper
+// ballooning at the wrist: two independently-noisy non-uniform scales
+// compounding on top of each other right at a sharp bend. A single
+// segment, tightly clamped and smoothed, is much safer for this rig
+// (linear blend skinning has no clean way to handle scale across a bent
+// joint — this keeps the bend it has to tolerate to just one boundary,
+// at the elbow, instead of two).
+const BONE_CHAIN_NEXT = { 'LeftArm':'LeftForeArm', 'RightArm':'RightForeArm' };
+const STRETCH_BONES = new Set(Object.keys(BONE_CHAIN_NEXT));
+let boneRestLength = {};   // { boneName: bind-pose world-space meters }
+let smoothedStretch = {};  // { boneName: smoothed scale factor }
+
 // Sanity bounds for the LIVE shoulder-width measurement, in meters. If the
 // person is too close to the camera (or leaning in so only the face is
 // framed), PoseLandmarker still returns shoulder/hip landmarks — it
@@ -558,6 +573,16 @@ function loadSuit(){
       bones['RightArm'].getWorldPosition(rp);
       restShoulderWidth = lp.distanceTo(rp) || 0.3;
 
+      boneRestLength = {};
+      for(const [name, childName] of Object.entries(BONE_CHAIN_NEXT)){
+        const b = bones[name], cb = bones[childName];
+        if(!b || !cb) continue;
+        const bp = new THREE.Vector3(), cp = new THREE.Vector3();
+        b.getWorldPosition(bp);
+        cb.getWorldPosition(cp);
+        boneRestLength[name] = bp.distanceTo(cp) || 0.01;
+      }
+
       maskGroup.add(root);
       bonesReady = true;
       dracoLoader.dispose();
@@ -619,6 +644,24 @@ function pointBoneTo(bone, targetWorldDir){
   bone.updateWorldMatrix(true, false);
 }
 
+// Stretches `bone` along its local +Y (the axis pointBoneTo just aimed
+// toward the elbow) so this segment's rendered length tracks the live
+// shoulder→elbow distance, on top of whatever uniform body scale is
+// already applied. Tightly clamped (0.85–1.35, i.e. at most ±35%) and
+// smoothed slowly — this is a single bone, not a chain, but a bent elbow
+// still means the mesh weights blend across the LeftArm/LeftForeArm
+// boundary, so keeping the range modest matters for not looking distorted.
+function applyBoneStretch(bone, boneName, liveLen){
+  const restLen = boneRestLength[boneName];
+  if(!restLen) return;
+  const globalScale = smoothedScale || 1;
+  const targetStretch = THREE.MathUtils.clamp((liveLen / restLen) / globalScale, 0.85, 1.35);
+  const prev = smoothedStretch[boneName];
+  const next = (prev === undefined) ? targetStretch : prev + (targetStretch - prev) * 0.12;
+  smoothedStretch[boneName] = next;
+  bone.scale.set(1, next, 1);
+}
+
 function applyPoseToSkeleton(worldLandmarks){
   for(const [boneName, pIdx, cIdx] of BONE_CHAINS){
     const bone = bones[boneName];
@@ -628,8 +671,10 @@ function applyPoseToSkeleton(worldLandmarks){
     if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN) ||
        (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN)) continue;
     const dir = mpVec(c).sub(mpVec(p));
-    if(dir.lengthSq() < 1e-8) continue;
-    pointBoneTo(bone, dir.normalize());
+    const liveLen = dir.length();
+    if(liveLen < 1e-4) continue;
+    pointBoneTo(bone, dir.clone().normalize());
+    if(STRETCH_BONES.has(boneName)) applyBoneStretch(bone, boneName, liveLen);
   }
 }
 
@@ -841,6 +886,7 @@ snapBtn.addEventListener('click', ()=>{
 // glitched and the size drifted.
 recalBtn.addEventListener('click', ()=>{
   smoothedScale = null;
+  smoothedStretch = {};
 });
 
 flipBtn.addEventListener('click', ()=>{
