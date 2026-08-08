@@ -89,7 +89,7 @@
       </g>
     </svg>
     <div class="top-actions">
-      <button class="icon-btn" id="flipBtn" aria-label="flip">
+      <button class="icon-btn active" id="flipBtn" aria-label="flip">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       </button>
       <button class="icon-btn active" id="dotsBtn" aria-label="tracking marks">
@@ -180,6 +180,19 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 // ─────────────────────────────────────────────────────────────────────────
 const SUIT_URL = './Advanced_Crew_Escape_Suit.glb';
 
+// Quick tuning knobs — no need to touch anything else in this file for
+// "too small" / "facing the wrong way" complaints, just adjust these two:
+//   SCALE_BOOST: multiplies the auto-calibrated size. 1 = as detected.
+//     Raise it (e.g. 1.6, 2.0) if the suit looks tiny on your face.
+//   DEFAULT_FLIP: the helmet's "front" as authored in Blender may not be
+//     the side facing the camera. true rotates it 180° on load so it faces
+//     you instead of facing away (which looks like it's pressed up against
+//     your face / "kissing" you at close depth). Toggle with the flip
+//     button (top-right icon) live to see which orientation is correct,
+//     then set this to match so it's right by default.
+const SCALE_BOOST = 1.6;
+const DEFAULT_FLIP = true;
+
 const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
 const dotsCanvas = document.getElementById('dotsCanvas');
@@ -207,7 +220,7 @@ const rTilt = document.getElementById('rTilt');
 // driven by tap instead of a labelled checkbox).
 let showDots = true;
 let autoRefit = true;
-let flip180 = false;
+let flip180 = DEFAULT_FLIP;
 
 let faceLandmarker = null;
 let trackingReady = false;
@@ -537,7 +550,7 @@ function applyCalibratedMatrix(){
     }
   }
 
-  const finalScale = autoScale * liveRatio * fine;
+  const finalScale = autoScale * liveRatio * fine * SCALE_BOOST;
   const flipYaw = flip180 ? Math.PI : 0;
   const calib = new THREE.Matrix4();
   calib.compose(
