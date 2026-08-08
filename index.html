@@ -3,59 +3,92 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lens Demo — Oni Mask AR</title>
+<title>Gaganyatri Lens — ISRO Anniversary AR Spacesuit</title>
 <style>
   :root{
-    --ink:#0d0f0c;
-    --panel:#15180f;
-    --focus:#c4ff4d;
-    --focus-dim:#7c9f3a;
+    --saffron:#FF9933;
+    --saffron-dim:#c97a29;
+    --white:#FFFFFF;
+    --green:#138808;
+    --green-dim:#0c5e06;
+    --chakra:#0b1f6b;
+    --ink:#0a0c14;
+    --panel:#12141f;
+    --paper:#f4f1e8;
     --warn:#ff6b4d;
-    --paper:#eef0e6;
     --mono:'IBM Plex Mono', 'Courier New', monospace;
     --sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);min-height:100%;}
-  .rig{max-width:520px;width:100%;margin:0 auto;padding:18px 16px 28px;}
-  .masthead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;font-family:var(--mono);letter-spacing:0.04em;}
-  .masthead .rec{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--focus-dim);}
+  .tricolor-strip{height:6px;width:100%;background:linear-gradient(90deg,var(--saffron) 0 33.3%, var(--white) 33.3% 66.6%, var(--green) 66.6% 100%);}
+  .rig{max-width:520px;width:100%;margin:0 auto;padding:16px 16px 28px;}
+  .masthead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:10px;}
+  .masthead .brand{display:flex;align-items:center;gap:10px;}
+  .chakra{width:30px;height:30px;flex:0 0 30px;animation:spin 9s linear infinite;}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+  .masthead h1{font-size:15px;margin:0;font-weight:800;letter-spacing:0.02em;color:var(--paper);line-height:1.2;}
+  .masthead .sub{font-family:var(--mono);font-size:10px;color:var(--saffron);letter-spacing:0.06em;margin-top:1px;}
+  .masthead .rec{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--green);font-family:var(--mono);white-space:nowrap;}
   .rec .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);animation:pulse 1.6s ease-in-out infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
-  .masthead h1{font-size:14px;margin:0;font-weight:600;color:var(--paper);}
-  .viewfinder{position:relative;width:100%;background:#000;border-radius:2px;overflow:hidden;border:1px solid #2a2e1f;aspect-ratio:4/3;}
+  .anniv-banner{font-family:var(--mono);font-size:10.5px;letter-spacing:0.04em;text-align:center;color:var(--ink);background:linear-gradient(90deg,var(--saffron),var(--white) 50%,var(--green));padding:5px 8px;border-radius:3px;margin:10px 0 14px;font-weight:700;}
+  .viewfinder{position:relative;width:100%;background:#000;border-radius:4px;overflow:hidden;border:1.5px solid var(--saffron-dim);aspect-ratio:4/3;box-shadow:0 0 0 1px var(--chakra) inset;}
   .viewfinder video{width:100%;height:100%;object-fit:contain;transform:scaleX(-1);display:block;background:#000;}
   .viewfinder canvas.gl{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;}
   .viewfinder canvas.dots{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;z-index:3;}
-  .corner{position:absolute;width:18px;height:18px;border:1.5px solid var(--focus);opacity:0.85;pointer-events:none;z-index:4;}
+  .corner{position:absolute;width:18px;height:18px;border:1.5px solid var(--saffron);opacity:0.9;pointer-events:none;z-index:4;}
   .corner.tl{top:10px;left:10px;border-right:none;border-bottom:none;}
   .corner.tr{top:10px;right:10px;border-left:none;border-bottom:none;}
   .corner.bl{bottom:10px;left:10px;border-right:none;border-top:none;}
   .corner.br{bottom:10px;right:10px;border-left:none;border-top:none;}
-  .readout{position:absolute;bottom:10px;left:14px;font-family:var(--mono);font-size:10px;color:var(--focus);letter-spacing:0.05em;text-shadow:0 1px 2px rgba(0,0,0,0.6);z-index:5;}
-  .status-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;font-family:var(--mono);font-size:12px;color:var(--focus-dim);background:rgba(13,15,12,0.92);z-index:6;}
+  .readout{position:absolute;bottom:10px;left:14px;font-family:var(--mono);font-size:10px;color:var(--green);letter-spacing:0.05em;text-shadow:0 1px 2px rgba(0,0,0,0.7);z-index:5;}
+  .flagmark{position:absolute;bottom:10px;right:12px;font-size:16px;z-index:5;text-shadow:0 1px 2px rgba(0,0,0,0.6);}
+  .status-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;font-family:var(--mono);font-size:12px;color:#c9cbb8;background:rgba(10,12,20,0.94);z-index:6;}
   .status-overlay.hidden{display:none;}
-  .start-btn{background:var(--focus);color:var(--ink);border:none;font-family:var(--sans);font-weight:700;font-size:14px;padding:13px 26px;border-radius:2px;cursor:pointer;}
-  .panel{background:var(--panel);border:1px solid #2a2e1f;border-radius:2px;margin-top:12px;padding:12px 14px;}
-  .panel summary{font-family:var(--mono);font-size:11px;letter-spacing:0.04em;color:var(--focus-dim);cursor:pointer;}
+  .start-btn{background:linear-gradient(90deg,var(--saffron),#ffb663);color:var(--ink);border:none;font-family:var(--sans);font-weight:800;font-size:14px;padding:13px 26px;border-radius:3px;cursor:pointer;}
+  .panel{background:var(--panel);border:1px solid #262a3a;border-left:3px solid var(--saffron-dim);border-radius:3px;margin-top:12px;padding:12px 14px;}
+  .panel summary{font-family:var(--mono);font-size:11px;letter-spacing:0.05em;color:#9aa0c9;cursor:pointer;font-weight:600;}
   .slider-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
-  .slider-row label{font-family:var(--mono);font-size:10px;width:64px;flex:0 0 64px;color:#9aa08a;}
-  .slider-row input[type=range]{flex:1;accent-color:var(--focus);}
+  .slider-row label{font-family:var(--mono);font-size:10px;width:64px;flex:0 0 64px;color:#8f95b8;}
+  .slider-row input[type=range]{flex:1;accent-color:var(--saffron);}
   .controls{display:flex;gap:10px;margin-top:14px;}
-  .main-btn{flex:1;background:var(--focus);color:var(--ink);border:none;font-family:var(--sans);font-weight:700;font-size:13px;padding:13px;border-radius:2px;cursor:pointer;letter-spacing:0.01em;}
+  .main-btn{flex:1;background:linear-gradient(90deg,var(--green),var(--green-dim));color:var(--paper);border:none;font-family:var(--sans);font-weight:800;font-size:13px;padding:13px;border-radius:3px;cursor:pointer;letter-spacing:0.01em;}
   .main-btn:active{transform:translateY(1px);}
-  .ghost-btn{background:transparent;border:1px solid #2a2e1f;color:var(--paper);font-family:var(--sans);font-size:13px;padding:13px 16px;border-radius:2px;cursor:pointer;}
-  .footnote{margin-top:16px;font-family:var(--mono);font-size:10px;color:#5a5f4e;line-height:1.6;letter-spacing:0.02em;}
-  .footnote b{color:#8a9078;}
+  .ghost-btn{background:transparent;border:1px solid var(--saffron-dim);color:var(--paper);font-family:var(--sans);font-size:13px;padding:13px 16px;border-radius:3px;cursor:pointer;}
+  .footnote{margin-top:16px;font-family:var(--mono);font-size:10px;color:#7d82a3;line-height:1.65;letter-spacing:0.02em;}
+  .footnote b{color:#b9beDD;}
+  .footnote .hl{color:var(--saffron);}
 </style>
 </head>
 <body>
+<div class="tricolor-strip"></div>
 
 <div class="rig">
   <div class="masthead">
-    <h1>LENS · ONI MASK</h1>
-    <div class="rec"><span class="dot"></span>LIVE PREVIEW</div>
+    <div class="brand">
+      <svg class="chakra" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="50" cy="50" r="44" fill="none" stroke="#0b1f6b" stroke-width="4"/>
+        <circle cx="50" cy="50" r="4" fill="#0b1f6b"/>
+        <g stroke="#0b1f6b" stroke-width="2.4">
+          <!-- 24 spokes -->
+          <line x1="50" y1="6" x2="50" y2="94"/><line x1="6" y1="50" x2="94" y2="50"/>
+          <line x1="12.9" y1="12.9" x2="87.1" y2="87.1"/><line x1="12.9" y1="87.1" x2="87.1" y2="12.9"/>
+          <line x1="24" y1="4.5" x2="76" y2="95.5"/><line x1="76" y1="4.5" x2="24" y2="95.5"/>
+          <line x1="4.5" y1="24" x2="95.5" y2="76"/><line x1="4.5" y1="76" x2="95.5" y2="24"/>
+          <line x1="34" y1="1.5" x2="66" y2="98.5"/><line x1="66" y1="1.5" x2="34" y2="98.5"/>
+          <line x1="1.5" y1="34" x2="98.5" y2="66"/><line x1="1.5" y1="66" x2="98.5" y2="34"/>
+        </g>
+      </svg>
+      <div>
+        <h1>GAGANYATRI LENS</h1>
+        <div class="sub">AR SPACESUIT · ISRO ANNIVERSARY EDITION</div>
+      </div>
+    </div>
+    <div class="rec"><span class="dot"></span>LIVE</div>
   </div>
+
+  <div class="anniv-banner">🚀 जय हिंद · CELEBRATING ISRO'S JOURNEY TO THE STARS 🇮🇳</div>
 
   <div class="viewfinder" id="viewfinder">
     <video id="video" playsinline muted></video>
@@ -64,34 +97,40 @@
     <div class="corner tl"></div><div class="corner tr"></div>
     <div class="corner bl"></div><div class="corner br"></div>
     <div class="readout" id="readout">TRACKING: —</div>
+    <div class="flagmark">🇮🇳</div>
     <div class="status-overlay" id="status">
-      <div>Tap to start the camera</div>
+      <div>Tap to suit up, Gaganyatri</div>
       <button class="start-btn" id="startBtn">Enable camera</button>
     </div>
   </div>
 
   <details class="panel" open>
-    <summary>TRACKING</summary>
+    <summary>MISSION TRACKING</summary>
     <div class="slider-row"><label>Points</label>
       <label style="width:auto;flex:1;display:flex;align-items:center;gap:6px;color:var(--paper);font-family:var(--sans);font-size:12px;">
-        <input type="checkbox" id="cShowDots" checked style="accent-color:var(--focus);"> show tracking marks
+        <input type="checkbox" id="cShowDots" checked style="accent-color:var(--saffron);"> show tracking marks
       </label>
     </div>
     <div class="slider-row"><label></label>
       <label style="width:auto;flex:1;display:flex;align-items:center;gap:6px;color:var(--paper);font-family:var(--sans);font-size:12px;">
-        <input type="checkbox" id="cAutoRefit" checked style="accent-color:var(--focus);"> auto re-fit when a new/different face appears
+        <input type="checkbox" id="cAutoRefit" checked style="accent-color:var(--saffron);"> auto re-fit when a new/different face appears
       </label>
     </div>
     <div class="slider-row"><label></label>
-      <button class="ghost-btn" id="recalBtn" style="width:100%;padding:8px;">Recalibrate mask size now</button>
+      <label style="width:auto;flex:1;display:flex;align-items:center;gap:6px;color:var(--paper);font-family:var(--sans);font-size:12px;">
+        <input type="checkbox" id="cFlip180" style="accent-color:var(--saffron);"> flip suit 180° (if it faces away from camera)
+      </label>
+    </div>
+    <div class="slider-row"><label></label>
+      <button class="ghost-btn" id="recalBtn" style="width:100%;padding:8px;">Recalibrate suit fit now</button>
     </div>
   </details>
 
   <details class="panel">
-    <summary>FINE-TUNE (optional — sizing is automatic)</summary>
+    <summary>FINE-TUNE (optional — sizing/anchoring is automatic)</summary>
     <div class="slider-row"><label>Size ×</label><input type="range" id="rFine" min="0.5" max="2" step="0.01" value="1"></div>
     <div class="slider-row"><label>Depth</label><input type="range" id="rDepth" min="-40" max="40" step="0.5" value="0"></div>
-    <div class="slider-row"><label>Height</label><input type="range" id="rHeight" min="-40" max="40" step="0.5" value="0"></div>
+    <div class="slider-row"><label>Height</label><input type="range" id="rHeight" min="-120" max="120" step="0.5" value="0"></div>
     <div class="slider-row"><label>Tilt</label><input type="range" id="rTilt" min="-45" max="45" step="1" value="0"></div>
   </details>
 
@@ -101,24 +140,28 @@
   </div>
 
   <div class="footnote">
-    HOW SIZING WORKS: on-device face-mesh tracking follows the cheek/nose/chin marks shown as
-    green dots. The mask calibrates a baseline fit against those marks the moment a face is seen
-    (about half a second), then keeps rescaling live off the real tracked distance between the
-    marks every frame — closer, farther, or a visibly different face size will re-fit
-    automatically when "auto re-fit" is on above. You can still force an instant re-fit with the
-    "Recalibrate" button. Toggle "show tracking marks" to see the live landmark points sizing is
-    based on.
+    <span class="hl">HOW IT WORKS:</span> on-device face-mesh tracking follows the cheek/nose/chin marks
+    shown as tracking dots. The suit's <b>helmet region</b> is auto-detected from the 3D model on load
+    and used as the anchor point — so the helmet locks to your head/face while the rest of the suit
+    hangs below it at the correct proportion. Sizing then keeps rescaling live off the tracked distance
+    between your cheeks, just like the face width calibrates a mask — closer, farther, or a different
+    face will re-fit automatically when "auto re-fit" is on.
     <br><br>
-    <b>EMBEDDING ON WIX:</b> (1) Upload <b>oni_no_face_mask.glb</b> to your Wix Media/File
-    manager, copy its public HTTPS link, and paste it into <b>MASK_URL</b> near the top of the
-    &lt;script&gt; below. (2) In Wix, add this via an "Embed Code → Embed a Widget / HTML
+    <span class="hl">FRAMING TIP:</span> since this is a full body suit anchored from your face, step back
+    from the camera so your torso is in frame too, not just your face — otherwise the suit will appear
+    zoomed in. Use <b>Size ×</b> and <b>Height</b> in Fine-tune to nudge the fit once you can see yourself.
+    If the suit appears to be facing backward, tick <b>"flip suit 180°"</b> above.
+    <br><br>
+    <span class="hl">EMBEDDING ON WIX:</span> (1) The suit model link is already set to your Wix Media
+    file (<b>Advanced_Crew_Escape_Suit.glb</b>) in <b>SUIT_URL</b> near the top of the &lt;script&gt;
+    below — replace it if you re-upload. (2) In Wix, add this via an "Embed Code → Embed a Widget / HTML
     iframe" element and paste this whole file's contents in, or upload it as a custom-code file.
-    (3) Open that element's settings and make sure <b>camera permission</b> is allowed for the
-    embed (Wix's embed panel has a permissions toggle for camera/mic — turn it on, otherwise the
-    browser silently blocks the camera inside the iframe). (4) Camera access only works on the
-    <b>published</b> site or Preview mode over HTTPS, not inside the Wix editor canvas. (5) Set
-    the element's height so the widget isn't cropped — it's responsive and will size itself to
-    the width you give it. V3
+    (3) Open that element's settings and make sure <b>camera permission</b> is allowed for the embed
+    (Wix's embed panel has a permissions toggle for camera/mic — turn it on, otherwise the browser
+    silently blocks the camera inside the iframe). (4) Camera access only works on the
+    <b>published</b> site or Preview mode over HTTPS, not inside the Wix editor canvas. (5) Set the
+    element's height so the widget isn't cropped — it's responsive and will size itself to the width
+    you give it.
   </div>
 </div>
 
@@ -136,13 +179,10 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 // ─────────────────────────────────────────────────────────────────────────
-// CONFIG — the one thing you need to change to embed this on Wix.
-// Local relative paths only work when this file and the .glb sit together
-// on a real server (or on Wix, which serves everything over HTTPS already).
-// If you host the .glb elsewhere (Wix Media Manager, a CDN, GitHub Pages),
-// put its public HTTPS URL here instead.
+// CONFIG — the one thing you need to change to re-embed this on Wix with a
+// different suit upload. Already pointed at your published Wix Media link.
 // ─────────────────────────────────────────────────────────────────────────
-const MASK_URL = 'https://static.wixstatic.com/3d/45c46c_6eff1bdf238c443ab162706b02b4035c.glb';
+const SUIT_URL = 'https://static.wixstatic.com/3d/45c46c_a988569f5b6b4399b46fab26ed219a0e.glb';
 
 const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
@@ -156,6 +196,7 @@ const snapBtn = document.getElementById('snapBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const cShowDots = document.getElementById('cShowDots');
 const cAutoRefit = document.getElementById('cAutoRefit');
+const cFlip180 = document.getElementById('cFlip180');
 const recalBtn = document.getElementById('recalBtn');
 const rFine = document.getElementById('rFine');
 const rDepth = document.getElementById('rDepth');
@@ -167,8 +208,8 @@ let trackingReady = false;
 let usingFallback = false;
 let lastMatrixData = null;
 let lastFaceLandmarks = null;
-let renderer, scene, camera, maskGroup, maskModel;
-let maskHalfExtents = null;
+let renderer, scene, camera, maskGroup, orientationGroup, maskModel;
+let maskHalfExtents = null;   // half-extents of the auto-detected HELMET region, used for scale calibration
 let autoScale = 1;
 let calibrationSamples = [];
 let isCalibrated = false;
@@ -217,8 +258,8 @@ async function startCamera(){
     await video.play();
     setViewfinderAspect(video.videoWidth, video.videoHeight);
     initThree();
-    statusEl.innerHTML = 'Loading face tracking + mask…';
-    await Promise.all([loadTracking(), loadMask()]);
+    statusEl.innerHTML = 'Loading face tracking + spacesuit…';
+    await Promise.all([loadTracking(), loadSuit()]);
     statusEl.classList.add('hidden');
     requestAnimationFrame(loop);
   }catch(err){
@@ -234,17 +275,20 @@ async function startCamera(){
 }
 
 function initThree(){
-  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha:true, antialias:true, preserveDrawingBuffer:true });
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha:true, antialias:true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   renderer.setSize(video.videoWidth, video.videoHeight, false);
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(63, video.videoWidth/video.videoHeight, 1, 5000);
   camera.position.set(0,0,0);
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a2a, 1.1));
-  const dir = new THREE.DirectionalLight(0xffffff, 1.4);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a2a, 1.2));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.5);
   dir.position.set(0, 80, 150);
   scene.add(dir);
+  const fill = new THREE.DirectionalLight(0xfff2d9, 0.6);
+  fill.position.set(-100, 40, -80);
+  scene.add(fill);
 
   maskGroup = new THREE.Group();
   maskGroup.matrixAutoUpdate = false;
@@ -275,30 +319,109 @@ async function loadTracking(){
   }
 }
 
-function loadMask(){
+// The uploaded suit model is authored Z-up (a common Blender export quirk)
+// rather than glTF's expected Y-up, and is a single full-body mesh (helmet
+// down to boots) rather than a face-shaped mask. So instead of just
+// re-centering on the whole model's bounding box (which would put the belly,
+// not the head, at the tracked face), we:
+//   1) scan every vertex to find the true bounding box,
+//   2) treat the top ~15% band (in the model's original "tall" axis) as the
+//      helmet region, and compute ITS bounding box separately,
+//   3) re-center the whole model's pivot on that helmet region's center, and
+//   4) use the helmet region's width (not the full body's width) as the
+//      scale-calibration target, so the helmet — not the shoulders — matches
+//      the tracked face width. The rest of the suit then hangs correctly
+//      below it, at true proportion.
+function loadSuit(){
   return new Promise((resolve)=>{
     const loader = new GLTFLoader();
     loader.setCrossOrigin('anonymous');
-    loader.load(MASK_URL, (gltf)=>{
+    loader.load(SUIT_URL, (gltf)=>{
       maskModel = gltf.scene;
       maskModel.traverse(o=>{ if(o.isMesh){ o.frustumCulled = false; } });
-      maskGroup.add(maskModel);
+      maskModel.updateMatrixWorld(true);
 
-      // Auto-recenter: shift the model so its bounding-box center sits at the
-      // pivot origin, so scale/rotation happen around the middle of the mask
-      // rather than wherever the artist happened to place the origin.
-      const box = new THREE.Box3().setFromObject(maskModel);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      maskModel.position.sub(center);
-      maskHalfExtents = size.multiplyScalar(0.5);
+      // Pass 1: full bounding box across every mesh's vertices.
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
+      const v = new THREE.Vector3();
+      maskModel.traverse(o=>{
+        if(o.isMesh && o.geometry && o.geometry.attributes.position){
+          const pos = o.geometry.attributes.position;
+          const mw = o.matrixWorld;
+          for(let i=0;i<pos.count;i++){
+            v.fromBufferAttribute(pos, i).applyMatrix4(mw);
+            if(v.x<minX)minX=v.x; if(v.x>maxX)maxX=v.x;
+            if(v.y<minY)minY=v.y; if(v.y>maxY)maxY=v.y;
+            if(v.z<minZ)minZ=v.z; if(v.z>maxZ)maxZ=v.z;
+          }
+        }
+      });
+
+      // Figure out which raw axis is "tall" (the standing height axis) —
+      // it's whichever span is clearly the largest of the three.
+      const spanX = maxX-minX, spanY = maxY-minY, spanZ = maxZ-minZ;
+      const spans = [{axis:'x',span:spanX},{axis:'y',span:spanY},{axis:'z',span:spanZ}].sort((a,b)=>b.span-a.span);
+      const tallAxis = spans[0].axis;
+
+      const getComp = (vec,axis)=> axis==='x'?vec.x:(axis==='y'?vec.y:vec.z);
+      const tallMax = tallAxis==='x'?maxX:(tallAxis==='y'?maxY:maxZ);
+      const tallMin = tallAxis==='x'?minX:(tallAxis==='y'?minY:minZ);
+      const tallSpan = tallMax - tallMin;
+      const HEAD_BAND = 0.15; // top 15% of standing height ≈ helmet + neck ring
+      const threshold = tallMax - HEAD_BAND*tallSpan;
+
+      // Pass 2: bounding box of just the vertices in that top band (the helmet).
+      let hMinX=Infinity,hMaxX=-Infinity,hMinY=Infinity,hMaxY=-Infinity,hMinZ=Infinity,hMaxZ=-Infinity;
+      maskModel.traverse(o=>{
+        if(o.isMesh && o.geometry && o.geometry.attributes.position){
+          const pos = o.geometry.attributes.position;
+          const mw = o.matrixWorld;
+          for(let i=0;i<pos.count;i++){
+            v.fromBufferAttribute(pos, i).applyMatrix4(mw);
+            if(getComp(v,tallAxis) >= threshold){
+              if(v.x<hMinX)hMinX=v.x; if(v.x>hMaxX)hMaxX=v.x;
+              if(v.y<hMinY)hMinY=v.y; if(v.y>hMaxY)hMaxY=v.y;
+              if(v.z<hMinZ)hMinZ=v.z; if(v.z>hMaxZ)hMaxZ=v.z;
+            }
+          }
+        }
+      });
+
+      const headCenter = new THREE.Vector3((hMinX+hMaxX)/2, (hMinY+hMaxY)/2, (hMinZ+hMaxZ)/2);
+      const headHalf = new THREE.Vector3((hMaxX-hMinX)/2, (hMaxY-hMinY)/2, (hMaxZ-hMinZ)/2);
+
+      // Re-center pivot on the helmet, in the model's original (raw) axes.
+      maskModel.position.sub(headCenter);
+
+      // Correct the raw "tall" axis onto three.js's Y-up so the suit stands
+      // upright in the scene, keeping the pivot (now at the origin) fixed.
+      orientationGroup = new THREE.Group();
+      if(tallAxis === 'z'){
+        orientationGroup.quaternion.setFromEuler(new THREE.Euler(-Math.PI/2, 0, 0));
+      } else if(tallAxis === 'x'){
+        orientationGroup.quaternion.setFromEuler(new THREE.Euler(0, 0, Math.PI/2));
+      } // tallAxis === 'y' → already correct orientation, no rotation needed
+      orientationGroup.add(maskModel);
+      maskGroup.add(orientationGroup);
+
+      // Half-extents used for scale calibration are the HELMET's, not the
+      // whole body's, so the tracked face width matches the helmet, and the
+      // rest of the suit follows at true scale beneath it.
+      const halfOnTallAxis = tallAxis==='x'?headHalf.x:(tallAxis==='y'?headHalf.y:headHalf.z);
+      const widthAxis = tallAxis==='z' ? 'x' : (tallAxis==='x' ? 'y' : 'x');
+      const halfOnWidthAxis = widthAxis==='x'?headHalf.x:(widthAxis==='y'?headHalf.y:headHalf.z);
+      maskHalfExtents = new THREE.Vector3(
+        Math.max(halfOnWidthAxis, 0.001),
+        Math.max(halfOnTallAxis, 0.001),
+        Math.max(headHalf.x, headHalf.y, headHalf.z, 0.001)
+      );
 
       resolve();
     }, undefined, (err)=>{
-      console.error('mask load failed', err);
+      console.error('suit load failed', err);
       statusEl.classList.remove('hidden');
-      statusEl.innerHTML = "Couldn't load the mask model.<br>" +
-        "Check that MASK_URL near the top of the script points to a reachable, CORS-enabled " +
+      statusEl.innerHTML = "Couldn't load the spacesuit model.<br>" +
+        "Check that SUIT_URL near the top of the script points to a reachable, CORS-enabled " +
         "HTTPS link (Wix Media Manager file links, or a CDN link, both work).";
       resolve();
     });
@@ -318,8 +441,8 @@ function enableDragFallback(){
   window.addEventListener('pointerup', ()=> dragging = false);
 }
 
-// Projects the mask's 8 bounding-box corners (at a given world matrix) through
-// the camera and returns how wide the mask appears in normalized device space.
+// Projects the helmet's 8 bounding-box corners (at a given world matrix) through
+// the camera and returns how wide it appears in normalized device space.
 function projectedMaskWidthNDC(worldMatrix){
   const h = maskHalfExtents;
   const corners = [
@@ -361,7 +484,7 @@ function applyCalibratedMatrix(){
   if(lastFaceLandmarks && lastFaceLandmarks[CHEEK_L] && lastFaceLandmarks[CHEEK_R]){
     const lm = lastFaceLandmarks;
     liveFaceWidthNDC = Math.abs((lm[CHEEK_R].x*2-1) - (lm[CHEEK_L].x*2-1));
-    // Smooth so single-frame landmark noise doesn't make the mask visibly
+    // Smooth so single-frame landmark noise doesn't make the suit visibly
     // pulse in size, while still tracking real changes within a few frames.
     smoothedFaceWidthNDC = (smoothedFaceWidthNDC === null)
       ? liveFaceWidthNDC
@@ -372,7 +495,7 @@ function applyCalibratedMatrix(){
   }
 
   // Calibration: for the first CALIBRATION_FRAMES frames after a face is seen,
-  // sample what scale makes the mask's projected width match the real face
+  // sample what scale makes the helmet's projected width match the real face
   // width, AND record the face width + depth as the baseline "real size"
   // fingerprint. Take the median of samples (robust to single-frame jitter).
   if(!isCalibrated && maskHalfExtents && liveFaceWidthNDC !== null){
@@ -383,7 +506,7 @@ function applyCalibratedMatrix(){
         width: liveFaceWidthNDC,
         metric: liveDepth ? liveFaceWidthNDC * liveDepth : null
       });
-      readout.textContent = `TRACKING: 3D FACE MESH — FITTING (${calibrationSamples.length}/${CALIBRATION_FRAMES})…`;
+      readout.textContent = `TRACKING: 3D FACE MESH — FITTING SUIT (${calibrationSamples.length}/${CALIBRATION_FRAMES})…`;
       if(calibrationSamples.length >= CALIBRATION_FRAMES){
         const ratios = calibrationSamples.map(s=>s.ratio).sort((a,b)=>a-b);
         const widths = calibrationSamples.map(s=>s.width).sort((a,b)=>a-b);
@@ -425,10 +548,11 @@ function applyCalibratedMatrix(){
   }
 
   const finalScale = autoScale * liveRatio * fine;
+  const flipYaw = cFlip180.checked ? Math.PI : 0;
   const calib = new THREE.Matrix4();
   calib.compose(
     new THREE.Vector3(0, height, depth),
-    new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt,0,0)),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt, flipYaw, 0)),
     new THREE.Vector3(finalScale, finalScale, finalScale)
   );
 
@@ -458,8 +582,8 @@ async function loop(){
 function drawTrackingDots(){
   dotsCtx.clearRect(0,0,dotsCanvas.width, dotsCanvas.height);
   if(!cShowDots.checked || !lastFaceLandmarks) return;
-  dotsCtx.fillStyle = '#c4ff4d';
-  dotsCtx.strokeStyle = 'rgba(196,255,77,0.5)';
+  dotsCtx.fillStyle = '#FF9933';
+  dotsCtx.strokeStyle = 'rgba(255,153,51,0.5)';
   for(const idx of MARK_POINTS){
     const lm = lastFaceLandmarks[idx];
     if(!lm) continue;
@@ -486,13 +610,14 @@ snapBtn.addEventListener('click', ()=>{
   downloadBtn.onclick = ()=>{
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = 'oni-lens-capture.png';
+    a.download = 'gaganyatri-lens-capture.png';
     a.click();
   };
   downloadBtn.textContent = 'Download capture';
 });
 
 recalBtn.addEventListener('click', startRecalibration);
+cFlip180.addEventListener('change', startRecalibration);
 </script>
 </body>
 </html>
