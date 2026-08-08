@@ -180,6 +180,18 @@ const SUIT_URL = './Advanced_Crew_Escape_Suit.glb';
 // looks a bit big/small on you.
 const SCALE_BOOST = 1.0;
 
+// The face-tracking placement (maskGroup's base matrix, from MediaPipe's
+// facialTransformationMatrixes) operates in MILLIMETERS — that's why the
+// camera's near/far, rDepth (±40), rHeight (±120), and the drag-fallback
+// z (-300, i.e. a 30cm selfie distance) are all sane numbers at that scale.
+// The rigged suit, however, came out of Blender in proper SI METERS (its
+// bone translations measure out to real anatomy directly: ~0.157m forearm,
+// ~0.049m neck, ~0.994m hip height). Dropped into the millimeter-scale
+// placement space with no conversion, a ~0.35m shoulder width renders at
+// about 1/1000th the size it should — this constant converts meters to
+// the scene's millimeter units so the two coordinate systems agree.
+const METERS_TO_SCENE_UNITS = 1000;
+
 // Same meaning as before: the helmet's authored "front" may not face the
 // camera by default. Toggle with the flip button (top-right) to check, then
 // set this to match so it's right on load.
@@ -600,7 +612,7 @@ function updatePlacementAndPose(){
   }
   statusDot.className = haveLiveScale ? 'status-dot locked' : 'status-dot fitting';
 
-  const finalScale = (smoothedScale !== null ? smoothedScale : SCALE_BOOST) * fine;
+  const finalScale = (smoothedScale !== null ? smoothedScale : SCALE_BOOST) * fine * METERS_TO_SCENE_UNITS;
   const flipYaw = flip180 ? Math.PI : 0;
   const calib = new THREE.Matrix4();
   calib.compose(
