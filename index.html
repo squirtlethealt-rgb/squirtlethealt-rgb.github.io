@@ -243,6 +243,18 @@ let bones = null;            // { 'Hips': THREE.Bone, 'LeftArm': THREE.Bone, ...
 let bonesReady = false;
 let restShoulderWidth = null; // bind-pose LeftArm↔RightArm distance, in the model's own (metric) units
 let smoothedScale = null;
+
+// Sanity bounds for the LIVE shoulder-width measurement, in meters. If the
+// person is too close to the camera (or leaning in so only the face is
+// framed), PoseLandmarker still returns shoulder/hip landmarks — it
+// extrapolates them even when they're not really visible — and the
+// resulting "shoulder width" can be wildly wrong (near-zero, or huge).
+// Feeding that straight into the scale calc is what shrinks the suit down
+// to a speck. These bounds cover a generous range of real adult shoulder
+// widths; anything outside it is treated as unreliable for THIS frame and
+// the previous smoothedScale is kept instead of chasing the bad reading.
+const MIN_LIVE_SHOULDER_M = 0.15;
+const MAX_LIVE_SHOULDER_M = 0.65;
 let manualOffset = {x:0, y:0};
 let suitLoadFailed = false;
 const CHEEK_L = 234, CHEEK_R = 454;
@@ -575,9 +587,15 @@ function updatePlacementAndPose(){
     const l = lastPoseWorldLandmarks[SHOULDER_L], r = lastPoseWorldLandmarks[SHOULDER_R];
     if(l && r && (l.visibility===undefined || l.visibility>=POSE_VISIBILITY_MIN) && (r.visibility===undefined || r.visibility>=POSE_VISIBILITY_MIN)){
       const liveShoulderWidth = mpVec(l).distanceTo(mpVec(r));
-      const targetScale = (liveShoulderWidth / restShoulderWidth) * SCALE_BOOST;
-      smoothedScale = (smoothedScale === null) ? targetScale : smoothedScale + (targetScale - smoothedScale) * 0.15;
-      haveLiveScale = true;
+      if(liveShoulderWidth >= MIN_LIVE_SHOULDER_M && liveShoulderWidth <= MAX_LIVE_SHOULDER_M){
+        const targetScale = (liveShoulderWidth / restShoulderWidth) * SCALE_BOOST;
+        smoothedScale = (smoothedScale === null) ? targetScale : smoothedScale + (targetScale - smoothedScale) * 0.15;
+        haveLiveScale = true;
+      }
+      // else: shoulders were "visible" per the confidence score but the
+      // measured width is implausible (typically because the person is too
+      // close/leaning in and the model is extrapolating past the frame
+      // edge) — skip this frame's reading rather than let it corrupt scale.
     }
   }
   statusDot.className = haveLiveScale ? 'status-dot locked' : 'status-dot fitting';
