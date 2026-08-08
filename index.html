@@ -181,16 +181,20 @@ const SUIT_URL = './Advanced_Crew_Escape_Suit.glb';
 const SCALE_BOOST = 1.0;
 
 // The face-tracking placement (maskGroup's base matrix, from MediaPipe's
-// facialTransformationMatrixes) operates in MILLIMETERS — that's why the
-// camera's near/far, rDepth (±40), rHeight (±120), and the drag-fallback
-// z (-300, i.e. a 30cm selfie distance) are all sane numbers at that scale.
-// The rigged suit, however, came out of Blender in proper SI METERS (its
-// bone translations measure out to real anatomy directly: ~0.157m forearm,
-// ~0.049m neck, ~0.994m hip height). Dropped into the millimeter-scale
-// placement space with no conversion, a ~0.35m shoulder width renders at
-// about 1/1000th the size it should — this constant converts meters to
-// the scene's millimeter units so the two coordinate systems agree.
-const METERS_TO_SCENE_UNITS = 1000;
+// facialTransformationMatrixes) operates in CENTIMETERS — MediaPipe's face
+// geometry module uses a centimeter-scale canonical space, and this also
+// matches the UI ranges here: rDepth ±40 (±40cm push closer/farther) and
+// rHeight ±120 (±120cm reposition range for a full-body suit) both make
+// sense at cm scale, not mm.
+//
+// The rigged suit, however, came out of Blender in proper SI METERS — I
+// measured its bone world positions directly by walking the exported node
+// hierarchy: LeftArm↔RightArm = 0.443m, Hips↔Head = 0.578m, both correct
+// real-world anatomy. Dropped into the centimeter-scale placement space
+// with no conversion, that ~0.44m shoulder width renders at 1/100th the
+// size it should — this constant converts meters to the scene's
+// centimeter units so the two coordinate systems agree.
+const METERS_TO_SCENE_UNITS = 100;
 
 // Same meaning as before: the helmet's authored "front" may not face the
 // camera by default. Toggle with the flip button (top-right) to check, then
