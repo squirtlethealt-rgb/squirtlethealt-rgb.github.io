@@ -158,7 +158,7 @@
 }
 </script>
 <script type="module">
-import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+import { FaceLandmarker, PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
@@ -229,12 +229,16 @@ let lastMatrixData = null;
 let lastFaceLandmarks = null;
 let renderer, scene, camera, maskGroup, orientationGroup, maskModel;
 let maskHalfExtents = null;   // half-extents of the auto-detected HELMET region, used for scale calibration
+let shoulderLocalCenter = null;   // shoulder-band bbox center, in maskModel's local (post head-recenter) space
+let shoulderLocalHalf = null;     // shoulder-band bbox half-extents, same space
 let autoScale = 1;
 let calibrationSamples = [];
 let isCalibrated = false;
 let baselineFaceWidthNDC = null;
+let baselineShoulderWidthNDC = null;
 let baselineMetricProxy = null;
 let smoothedFaceWidthNDC = null;
+let smoothedShoulderWidthNDC = null;
 let mismatchStreak = 0;
 let suitLoadFailed = false;
 const CALIBRATION_FRAMES = 22;
@@ -242,6 +246,16 @@ const REFIT_MISMATCH_RATIO = 0.32;
 const REFIT_MISMATCH_FRAMES = 18;
 const CHEEK_L = 234, CHEEK_R = 454;
 const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
+
+// Body pose tracking (BlazePose landmark indices) — used to fit the suit's
+// torso width off the actual shoulders instead of only extrapolating from
+// face width, which was the source of the "too small" sizing.
+let poseLandmarker = null;
+let poseTrackingReady = false;
+let lastPoseLandmarks = null;
+const SHOULDER_L = 11, SHOULDER_R = 12, HIP_L = 23, HIP_R = 24;
+const POSE_MARK_POINTS = [SHOULDER_L, SHOULDER_R, HIP_L, HIP_R];
+const POSE_VISIBILITY_MIN = 0.5;
 let dragging = false, dragStart = {x:0,y:0};
 let manualOffset = {x:0, y:0};
 let cameraStarted = false;
@@ -255,8 +269,10 @@ function startRecalibration(){
   calibrationSamples = [];
   isCalibrated = false;
   baselineFaceWidthNDC = null;
+  baselineShoulderWidthNDC = null;
   baselineMetricProxy = null;
   smoothedFaceWidthNDC = null;
+  smoothedShoulderWidthNDC = null;
   mismatchStreak = 0;
   statusDot.className = 'status-dot';
 }
@@ -325,8 +341,9 @@ function initThree(){
 }
 
 async function loadTracking(){
+  let filesetResolver;
   try{
-    const filesetResolver = await FilesetResolver.forVisionTasks(
+    filesetResolver = await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
     );
     faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
@@ -343,6 +360,25 @@ async function loadTracking(){
   }catch(e){
     usingFallback = true;
     enableDragFallback();
+    return;
+  }
+
+  // Body pose is a nice-to-have on top of face tracking, not a hard
+  // requirement — if it fails to load (slow connection, old device) we
+  // just fall back to face-only fitting, same as before this feature.
+  try{
+    poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        delegate: "GPU"
+      },
+      runningMode: "VIDEO",
+      numPoses: 1
+    });
+    poseTrackingReady = true;
+  }catch(e){
+    console.warn('pose tracking unavailable, falling back to face-only fit', e);
+    poseTrackingReady = false;
   }
 }
 
@@ -354,9 +390,11 @@ async function loadTracking(){
 //
 // We scan every vertex to find the true bounding box, treat the top ~15%
 // band (in the model's "tall" axis) as the helmet region, re-center the
-// pivot there, and use ONLY that region's width for scale calibration —
-// so the helmet (not the shoulders) matches the tracked face, and the rest
-// of the suit hangs below it at true proportion.
+// pivot there. We also grab a second band just below it (~15%–30% down)
+// as the SHOULDER region. Calibration then blends two measurements — face
+// width vs. helmet width, AND live shoulder width (from body pose) vs.
+// suit shoulder width — so the fit is anchored to your actual body size,
+// not just extrapolated from your face.
 function loadSuit(){
   return new Promise((resolve)=>{
     const dracoLoader = new DRACOLoader();
@@ -418,6 +456,39 @@ function loadSuit(){
       const headCenter = new THREE.Vector3((hMinX+hMaxX)/2, (hMinY+hMaxY)/2, (hMinZ+hMaxZ)/2);
       const headHalf = new THREE.Vector3((hMaxX-hMinX)/2, (hMaxY-hMinY)/2, (hMaxZ-hMinZ)/2);
 
+      // Shoulder band: the slice just below the head band. This is where
+      // a suit is at its widest across the torso, so it's the right region
+      // to compare against live shoulder-width from body pose tracking.
+      const SHOULDER_BAND_TOP = 0.15, SHOULDER_BAND_BOTTOM = 0.30;
+      const shThreshTop = tallMax - SHOULDER_BAND_TOP*tallSpan;
+      const shThreshBottom = tallMax - SHOULDER_BAND_BOTTOM*tallSpan;
+      let sMinX=Infinity,sMaxX=-Infinity,sMinY=Infinity,sMaxY=-Infinity,sMinZ=Infinity,sMaxZ=-Infinity;
+      maskModel.traverse(o=>{
+        if(o.isMesh && o.geometry && o.geometry.attributes.position){
+          const pos = o.geometry.attributes.position;
+          const mw = o.matrixWorld;
+          for(let i=0;i<pos.count;i++){
+            v.fromBufferAttribute(pos, i).applyMatrix4(mw);
+            const c = getComp(v,tallAxis);
+            if(c < shThreshTop && c >= shThreshBottom){
+              if(v.x<sMinX)sMinX=v.x; if(v.x>sMaxX)sMaxX=v.x;
+              if(v.y<sMinY)sMinY=v.y; if(v.y>sMaxY)sMaxY=v.y;
+              if(v.z<sMinZ)sMinZ=v.z; if(v.z>sMaxZ)sMaxZ=v.z;
+            }
+          }
+        }
+      });
+      if(isFinite(sMinX)){
+        const shoulderCenter = new THREE.Vector3((sMinX+sMaxX)/2, (sMinY+sMaxY)/2, (sMinZ+sMaxZ)/2);
+        const shoulderHalf = new THREE.Vector3((sMaxX-sMinX)/2, (sMaxY-sMinY)/2, (sMaxZ-sMinZ)/2);
+        shoulderLocalCenter = shoulderCenter.clone().sub(headCenter);
+        shoulderLocalHalf = new THREE.Vector3(
+          Math.max(shoulderHalf.x, 0.001),
+          Math.max(shoulderHalf.y, 0.001),
+          Math.max(shoulderHalf.z, 0.001)
+        );
+      }
+
       maskModel.position.sub(headCenter);
 
       orientationGroup = new THREE.Group();
@@ -462,20 +533,30 @@ function enableDragFallback(){
   window.addEventListener('pointerup', ()=> dragging = false);
 }
 
-function projectedMaskWidthNDC(worldMatrix){
-  const h = maskHalfExtents;
+// worldMatrix here is "base" — the un-scaled face-tracking transform —
+// matching how calibration always measures the suit's INHERENT (scale=1)
+// projected size against a live measurement, then derives a ratio.
+// center/half are in maskModel's local space (same frame as maskHalfExtents),
+// so we rotate by orientationGroup's fixed quaternion to land in maskGroup's
+// local space before applying worldMatrix, same as the render pipeline does.
+function projectedRegionWidthNDC(worldMatrix, center, half){
   const corners = [
-    [ h.x, h.y, h.z], [-h.x, h.y, h.z], [ h.x,-h.y, h.z], [-h.x,-h.y, h.z],
-    [ h.x, h.y,-h.z], [-h.x, h.y,-h.z], [ h.x,-h.y,-h.z], [-h.x,-h.y,-h.z]
+    [ half.x, half.y, half.z], [-half.x, half.y, half.z], [ half.x,-half.y, half.z], [-half.x,-half.y, half.z],
+    [ half.x, half.y,-half.z], [-half.x, half.y,-half.z], [ half.x,-half.y,-half.z], [-half.x,-half.y,-half.z]
   ];
   let minX = Infinity, maxX = -Infinity;
   const v = new THREE.Vector3();
+  const q = orientationGroup ? orientationGroup.quaternion : new THREE.Quaternion();
   for(const c of corners){
-    v.set(c[0], c[1], c[2]).applyMatrix4(worldMatrix).project(camera);
+    v.set(center.x+c[0], center.y+c[1], center.z+c[2]).applyQuaternion(q).applyMatrix4(worldMatrix).project(camera);
     if(v.x < minX) minX = v.x;
     if(v.x > maxX) maxX = v.x;
   }
   return maxX - minX;
+}
+const ZERO_VEC = new THREE.Vector3(0,0,0);
+function projectedMaskWidthNDC(worldMatrix){
+  return projectedRegionWidthNDC(worldMatrix, ZERO_VEC, maskHalfExtents);
 }
 
 function applyCalibratedMatrix(){
@@ -508,22 +589,61 @@ function applyCalibratedMatrix(){
     liveDepth = Math.abs(lastMatrixData[14]) || null;
   }
 
+  let liveShoulderWidthNDC = null;
+  if(lastPoseLandmarks && lastPoseLandmarks[SHOULDER_L] && lastPoseLandmarks[SHOULDER_R]){
+    const lm = lastPoseLandmarks;
+    const l = lm[SHOULDER_L], r = lm[SHOULDER_R];
+    const visOk = (l.visibility === undefined || l.visibility >= POSE_VISIBILITY_MIN)
+               && (r.visibility === undefined || r.visibility >= POSE_VISIBILITY_MIN);
+    if(visOk){
+      liveShoulderWidthNDC = Math.abs((r.x*2-1) - (l.x*2-1));
+      smoothedShoulderWidthNDC = (smoothedShoulderWidthNDC === null)
+        ? liveShoulderWidthNDC
+        : smoothedShoulderWidthNDC + (liveShoulderWidthNDC - smoothedShoulderWidthNDC) * 0.15;
+    }
+  }
+
   if(!isCalibrated && maskHalfExtents && liveFaceWidthNDC !== null){
     const maskWidthNDC = projectedMaskWidthNDC(base);
+    let shoulderRatio = null, shoulderWidthSample = null;
+    if(shoulderLocalCenter && shoulderLocalHalf && liveShoulderWidthNDC !== null){
+      const shoulderMaskWidthNDC = projectedRegionWidthNDC(base, shoulderLocalCenter, shoulderLocalHalf);
+      if(shoulderMaskWidthNDC > 0.0001 && isFinite(shoulderMaskWidthNDC)){
+        shoulderRatio = liveShoulderWidthNDC / shoulderMaskWidthNDC;
+        shoulderWidthSample = liveShoulderWidthNDC;
+      }
+    }
     if(maskWidthNDC > 0.0001 && isFinite(maskWidthNDC)){
       calibrationSamples.push({
         ratio: liveFaceWidthNDC / maskWidthNDC,
         width: liveFaceWidthNDC,
-        metric: liveDepth ? liveFaceWidthNDC * liveDepth : null
+        metric: liveDepth ? liveFaceWidthNDC * liveDepth : null,
+        shoulderRatio,
+        shoulderWidth: shoulderWidthSample
       });
       statusDot.className = 'status-dot fitting';
       if(calibrationSamples.length >= CALIBRATION_FRAMES){
         const ratios = calibrationSamples.map(s=>s.ratio).sort((a,b)=>a-b);
         const widths = calibrationSamples.map(s=>s.width).sort((a,b)=>a-b);
         const metrics = calibrationSamples.map(s=>s.metric).filter(m=>m!==null).sort((a,b)=>a-b);
-        autoScale = ratios[Math.floor(ratios.length/2)];
+        const shoulderRatios = calibrationSamples.map(s=>s.shoulderRatio).filter(r=>r!==null).sort((a,b)=>a-b);
+        const shoulderWidths = calibrationSamples.map(s=>s.shoulderWidth).filter(w=>w!==null).sort((a,b)=>a-b);
+
+        const faceMedianRatio = ratios[Math.floor(ratios.length/2)];
         baselineFaceWidthNDC = widths[Math.floor(widths.length/2)];
         baselineMetricProxy = metrics.length ? metrics[Math.floor(metrics.length/2)] : null;
+
+        // Body-tracked shoulder width, when available, is a steadier scale
+        // reference than face width alone (it doesn't shrink when you turn
+        // your head), so blend the two 50/50 rather than trusting face only.
+        if(shoulderRatios.length >= CALIBRATION_FRAMES * 0.5){
+          const shoulderMedianRatio = shoulderRatios[Math.floor(shoulderRatios.length/2)];
+          baselineShoulderWidthNDC = shoulderWidths[Math.floor(shoulderWidths.length/2)];
+          autoScale = (faceMedianRatio + shoulderMedianRatio) / 2;
+        } else {
+          baselineShoulderWidthNDC = null;
+          autoScale = faceMedianRatio;
+        }
         isCalibrated = true;
         mismatchStreak = 0;
       }
@@ -532,7 +652,13 @@ function applyCalibratedMatrix(){
 
   let liveRatio = 1;
   if(isCalibrated && baselineFaceWidthNDC && smoothedFaceWidthNDC !== null){
-    liveRatio = smoothedFaceWidthNDC / baselineFaceWidthNDC;
+    const faceLiveRatio = smoothedFaceWidthNDC / baselineFaceWidthNDC;
+    if(baselineShoulderWidthNDC && smoothedShoulderWidthNDC !== null){
+      const shoulderLiveRatio = smoothedShoulderWidthNDC / baselineShoulderWidthNDC;
+      liveRatio = (faceLiveRatio + shoulderLiveRatio) / 2;
+    } else {
+      liveRatio = faceLiveRatio;
+    }
     statusDot.className = 'status-dot locked';
   }
 
@@ -563,11 +689,18 @@ function applyCalibratedMatrix(){
 }
 
 async function loop(){
+  const now = performance.now();
   if(trackingReady && faceLandmarker && video.readyState >= 2){
-    const results = faceLandmarker.detectForVideo(video, performance.now());
+    const results = faceLandmarker.detectForVideo(video, now);
     if(results.facialTransformationMatrixes && results.facialTransformationMatrixes.length){
       lastMatrixData = results.facialTransformationMatrixes[0].data;
       lastFaceLandmarks = (results.faceLandmarks && results.faceLandmarks[0]) || lastFaceLandmarks;
+    }
+  }
+  if(poseTrackingReady && poseLandmarker && video.readyState >= 2){
+    const poseResults = poseLandmarker.detectForVideo(video, now);
+    if(poseResults.landmarks && poseResults.landmarks.length){
+      lastPoseLandmarks = poseResults.landmarks[0];
     }
   }
 
@@ -582,16 +715,42 @@ async function loop(){
 
 function drawTrackingDots(){
   dotsCtx.clearRect(0,0,dotsCanvas.width, dotsCanvas.height);
-  if(!showDots || !lastFaceLandmarks) return;
-  dotsCtx.fillStyle = '#FF9933';
-  for(const idx of MARK_POINTS){
-    const lm = lastFaceLandmarks[idx];
-    if(!lm) continue;
-    const x = lm.x * dotsCanvas.width;
-    const y = lm.y * dotsCanvas.height;
-    dotsCtx.beginPath();
-    dotsCtx.arc(x, y, 3, 0, Math.PI*2);
-    dotsCtx.fill();
+  if(!showDots) return;
+
+  if(lastFaceLandmarks){
+    dotsCtx.fillStyle = '#FF9933';
+    for(const idx of MARK_POINTS){
+      const lm = lastFaceLandmarks[idx];
+      if(!lm) continue;
+      const x = lm.x * dotsCanvas.width;
+      const y = lm.y * dotsCanvas.height;
+      dotsCtx.beginPath();
+      dotsCtx.arc(x, y, 3, 0, Math.PI*2);
+      dotsCtx.fill();
+    }
+  }
+
+  if(lastPoseLandmarks){
+    dotsCtx.fillStyle = '#138808';
+    for(const idx of POSE_MARK_POINTS){
+      const lm = lastPoseLandmarks[idx];
+      if(!lm) continue;
+      if(lm.visibility !== undefined && lm.visibility < POSE_VISIBILITY_MIN) continue;
+      const x = lm.x * dotsCanvas.width;
+      const y = lm.y * dotsCanvas.height;
+      dotsCtx.beginPath();
+      dotsCtx.arc(x, y, 4, 0, Math.PI*2);
+      dotsCtx.fill();
+    }
+    const l = lastPoseLandmarks[SHOULDER_L], r = lastPoseLandmarks[SHOULDER_R];
+    if(l && r){
+      dotsCtx.strokeStyle = '#138808';
+      dotsCtx.lineWidth = 2;
+      dotsCtx.beginPath();
+      dotsCtx.moveTo(l.x*dotsCanvas.width, l.y*dotsCanvas.height);
+      dotsCtx.lineTo(r.x*dotsCanvas.width, r.y*dotsCanvas.height);
+      dotsCtx.stroke();
+    }
   }
 }
 
