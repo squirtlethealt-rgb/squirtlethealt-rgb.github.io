@@ -222,6 +222,19 @@ const POSE_X_SIGN = 1;
 const POSE_Y_SIGN = -1;
 const POSE_Z_SIGN = -1;
 
+// Same idea as the POSE_*_SIGN constants above, but for HandLandmarker's
+// worldLandmarks (hand-centered, metric, one set per detected hand — NOT
+// the same coordinate origin as pose's hip-centered landmarks, but the
+// axis-sign convention across MediaPipe's vision tasks is shared, so the
+// same starting signs are a reasonable default). Only ever used for
+// DIFFERENCES between two landmarks within the same hand (finger bend
+// direction), never as an absolute position, so a mismatched origin
+// doesn't matter — only these signs do. If a finger curls the wrong way,
+// flip the matching axis here.
+const HAND_X_SIGN = 1;
+const HAND_Y_SIGN = -1;
+const HAND_Z_SIGN = -1;
+
 const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
 const dotsCanvas = document.getElementById('dotsCanvas');
@@ -326,11 +339,35 @@ const BONE_CHAINS = [
   ['RightFoot', ANKLE_R, FOOT_INDEX_R],
 ];
 
-// Hand tracking — up to 2 hands, 21 landmarks each (not yet wired to the
-// suit's index-finger bones; drawn as an overlay only, same as before).
+// Hand tracking — up to 2 hands, 21 landmarks each. Drawn as the white dot
+// overlay (image-space landmarks) AND now also retargeted onto the suit's
+// index-finger bones (metric worldLandmarks, one set per hand, keyed by
+// MediaPipe's handedness label so it's matched to the correct glove).
+//
+// The rig only has bones for the index finger (LeftHandIndex1-4 /
+// RightHandIndex1-4) — no thumb/middle/ring/pinky bones exist on this
+// model, so those fingers can't be individually posed here; they stay in
+// whatever shape they were sculpted in. Adding them would mean re-rigging
+// the source mesh, not something this retargeting layer can add on its own.
+//
+// HandLandmarker's 21 points per hand: 0=wrist, 1-4=thumb, 5-8=index
+// (MCP,PIP,DIP,TIP), 9-12=middle, 13-16=ring, 17-20=pinky. Each entry below
+// is [bone name, parent landmark idx, child landmark idx, handedness label],
+// same parent→child direction pattern as BONE_CHAINS.
+const INDEX_MCP = 5, INDEX_PIP = 6, INDEX_DIP = 7, INDEX_TIP = 8;
+const FINGER_CHAINS = [
+  ['LeftHandIndex1', INDEX_MCP, INDEX_PIP, 'Left'],
+  ['LeftHandIndex2', INDEX_PIP, INDEX_DIP, 'Left'],
+  ['LeftHandIndex3', INDEX_DIP, INDEX_TIP, 'Left'],
+  ['RightHandIndex1', INDEX_MCP, INDEX_PIP, 'Right'],
+  ['RightHandIndex2', INDEX_PIP, INDEX_DIP, 'Right'],
+  ['RightHandIndex3', INDEX_DIP, INDEX_TIP, 'Right'],
+];
+
 let handLandmarker = null;
 let handTrackingReady = false;
 let lastHandLandmarks = [];
+let lastHandWorldByLabel = {}; // { 'Left': worldLandmarks[], 'Right': worldLandmarks[] }
 const HAND_CONNECTIONS = [
   [0,1],[1,2],[2,3],[3,4],
   [0,5],[5,6],[6,7],[7,8],
@@ -556,6 +593,12 @@ function mpVec(lm){
   return new THREE.Vector3(lm.x*POSE_X_SIGN, lm.y*POSE_Y_SIGN, lm.z*POSE_Z_SIGN);
 }
 
+// Same conversion as mpVec, but for HandLandmarker's per-hand worldLandmarks
+// and their own sign constants (see HAND_*_SIGN above).
+function mpVecHand(lm){
+  return new THREE.Vector3(lm.x*HAND_X_SIGN, lm.y*HAND_Y_SIGN, lm.z*HAND_Z_SIGN);
+}
+
 const _tmpQ = new THREE.Quaternion();
 const RESTY = new THREE.Vector3(0,1,0);
 
@@ -585,6 +628,22 @@ function applyPoseToSkeleton(worldLandmarks){
     if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN) ||
        (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN)) continue;
     const dir = mpVec(c).sub(mpVec(p));
+    if(dir.lengthSq() < 1e-8) continue;
+    pointBoneTo(bone, dir.normalize());
+  }
+}
+
+// Curls the index-finger bones per hand using HandLandmarker's landmarks.
+// Only the index finger has bones on this rig (see FINGER_CHAINS comment) —
+// thumb/middle/ring/pinky have no bone to move and stay as sculpted.
+function applyFingersToSkeleton(handWorldByLabel){
+  for(const [boneName, pIdx, cIdx, label] of FINGER_CHAINS){
+    const bone = bones[boneName];
+    const hand = handWorldByLabel[label];
+    if(!bone || !hand) continue;
+    const p = hand[pIdx], c = hand[cIdx];
+    if(!p || !c) continue;
+    const dir = mpVecHand(c).sub(mpVecHand(p));
     if(dir.lengthSq() < 1e-8) continue;
     pointBoneTo(bone, dir.normalize());
   }
@@ -644,6 +703,9 @@ function updatePlacementAndPose(){
   if(poseRetargetEnabled && lastPoseWorldLandmarks && bonesReady){
     applyPoseToSkeleton(lastPoseWorldLandmarks);
   }
+  if(poseRetargetEnabled && bonesReady){
+    applyFingersToSkeleton(lastHandWorldByLabel);
+  }
 }
 
 async function loop(){
@@ -668,6 +730,14 @@ async function loop(){
     const handResults = handLandmarker.detectForVideo(video, now);
     if(handResults.landmarks){
       lastHandLandmarks = handResults.landmarks;
+    }
+    if(handResults.worldLandmarks && handResults.handednesses){
+      const byLabel = {};
+      for(let i=0;i<handResults.worldLandmarks.length;i++){
+        const cat = handResults.handednesses[i] && handResults.handednesses[i][0];
+        if(cat && cat.categoryName) byLabel[cat.categoryName] = handResults.worldLandmarks[i];
+      }
+      lastHandWorldByLabel = byLabel;
     }
   }
 
