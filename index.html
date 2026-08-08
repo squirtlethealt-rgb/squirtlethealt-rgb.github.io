@@ -17,13 +17,13 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);min-height:100%;}
-  .rig{max-width:520px;margin:0 auto;padding:18px 16px 28px;}
+  .rig{max-width:520px;width:100%;margin:0 auto;padding:18px 16px 28px;}
   .masthead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;font-family:var(--mono);letter-spacing:0.04em;}
   .masthead .rec{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--focus-dim);}
   .rec .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);animation:pulse 1.6s ease-in-out infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
   .masthead h1{font-size:14px;margin:0;font-weight:600;color:var(--paper);}
-  .viewfinder{position:relative;width:100%;background:#000;border-radius:2px;overflow:hidden;border:1px solid #2a2e1f;}
+  .viewfinder{position:relative;width:100%;background:#000;border-radius:2px;overflow:hidden;border:1px solid #2a2e1f;aspect-ratio:4/3;}
   .viewfinder video{width:100%;height:100%;object-fit:contain;transform:scaleX(-1);display:block;background:#000;}
   .viewfinder canvas.gl{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;}
   .viewfinder canvas.dots{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;z-index:3;}
@@ -33,8 +33,9 @@
   .corner.bl{bottom:10px;left:10px;border-right:none;border-top:none;}
   .corner.br{bottom:10px;right:10px;border-left:none;border-top:none;}
   .readout{position:absolute;bottom:10px;left:14px;font-family:var(--mono);font-size:10px;color:var(--focus);letter-spacing:0.05em;text-shadow:0 1px 2px rgba(0,0,0,0.6);z-index:5;}
-  .status-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-family:var(--mono);font-size:12px;color:var(--focus-dim);background:rgba(13,15,12,0.8);z-index:6;}
+  .status-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;font-family:var(--mono);font-size:12px;color:var(--focus-dim);background:rgba(13,15,12,0.92);z-index:6;}
   .status-overlay.hidden{display:none;}
+  .start-btn{background:var(--focus);color:var(--ink);border:none;font-family:var(--sans);font-weight:700;font-size:14px;padding:13px 26px;border-radius:2px;cursor:pointer;}
   .panel{background:var(--panel);border:1px solid #2a2e1f;border-radius:2px;margin-top:12px;padding:12px 14px;}
   .panel summary{font-family:var(--mono);font-size:11px;letter-spacing:0.04em;color:var(--focus-dim);cursor:pointer;}
   .slider-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
@@ -45,6 +46,7 @@
   .main-btn:active{transform:translateY(1px);}
   .ghost-btn{background:transparent;border:1px solid #2a2e1f;color:var(--paper);font-family:var(--sans);font-size:13px;padding:13px 16px;border-radius:2px;cursor:pointer;}
   .footnote{margin-top:16px;font-family:var(--mono);font-size:10px;color:#5a5f4e;line-height:1.6;letter-spacing:0.02em;}
+  .footnote b{color:#8a9078;}
 </style>
 </head>
 <body>
@@ -56,13 +58,16 @@
   </div>
 
   <div class="viewfinder" id="viewfinder">
-    <video id="video" autoplay playsinline muted></video>
+    <video id="video" playsinline muted></video>
     <canvas class="gl" id="glCanvas"></canvas>
     <canvas class="dots" id="dotsCanvas"></canvas>
     <div class="corner tl"></div><div class="corner tr"></div>
     <div class="corner bl"></div><div class="corner br"></div>
     <div class="readout" id="readout">TRACKING: —</div>
-    <div class="status-overlay" id="status">Requesting camera access…</div>
+    <div class="status-overlay" id="status">
+      <div>Tap to start the camera</div>
+      <button class="start-btn" id="startBtn">Enable camera</button>
+    </div>
   </div>
 
   <details class="panel" open>
@@ -73,7 +78,12 @@
       </label>
     </div>
     <div class="slider-row"><label></label>
-      <button class="ghost-btn" id="recalBtn" style="width:100%;padding:8px;">Recalibrate mask size</button>
+      <label style="width:auto;flex:1;display:flex;align-items:center;gap:6px;color:var(--paper);font-family:var(--sans);font-size:12px;">
+        <input type="checkbox" id="cAutoRefit" checked style="accent-color:var(--focus);"> auto re-fit when a new/different face appears
+      </label>
+    </div>
+    <div class="slider-row"><label></label>
+      <button class="ghost-btn" id="recalBtn" style="width:100%;padding:8px;">Recalibrate mask size now</button>
     </div>
   </details>
 
@@ -91,20 +101,24 @@
   </div>
 
   <div class="footnote">
-    PROOF OF CONCEPT — tracks the face in 3D (position, rotation, depth) using on-device face
-    mesh tracking, then renders the uploaded mask model locked to the head. It calibrates a
-    baseline fit over the first second a face is seen, then keeps scaling live off the actual
-    tracked marks after that — if the face gets closer, farther, or a different person puts it on,
-    the mask resizes to match, smoothed so it doesn't flicker frame to frame. Hit "Recalibrate mask
-    size" to reset the baseline at any point. Toggle "show tracking marks" to see the live landmark
-    points the mask's size and position are following. If tracking can't load (slow network,
-    unsupported browser), the mask still renders and can be positioned by dragging.
+    HOW SIZING WORKS: on-device face-mesh tracking follows the cheek/nose/chin marks shown as
+    green dots. The mask calibrates a baseline fit against those marks the moment a face is seen
+    (about half a second), then keeps rescaling live off the real tracked distance between the
+    marks every frame — closer, farther, or a visibly different face size will re-fit
+    automatically when "auto re-fit" is on above. You can still force an instant re-fit with the
+    "Recalibrate" button. Toggle "show tracking marks" to see the live landmark points sizing is
+    based on.
     <br><br>
-    IMPORTANT: don't open this file by double-clicking it — browsers block a local HTML file from
-    loading the .glb next to it that way. Instead, from the folder containing both files, run a
-    tiny local server and open the printed address, e.g.: <b>python3 -m http.server 8000</b> then
-    visit <b>http://localhost:8000/lens-demo-3d.html</b>. (Once this is embedded on Wix itself,
-    this issue goes away — Wix serves everything over normal HTTPS.)
+    <b>EMBEDDING ON WIX:</b> (1) Upload <b>oni_no_face_mask.glb</b> to your Wix Media/File
+    manager, copy its public HTTPS link, and paste it into <b>MASK_URL</b> near the top of the
+    &lt;script&gt; below. (2) In Wix, add this via an "Embed Code → Embed a Widget / HTML
+    iframe" element and paste this whole file's contents in, or upload it as a custom-code file.
+    (3) Open that element's settings and make sure <b>camera permission</b> is allowed for the
+    embed (Wix's embed panel has a permissions toggle for camera/mic — turn it on, otherwise the
+    browser silently blocks the camera inside the iframe). (4) Camera access only works on the
+    <b>published</b> site or Preview mode over HTTPS, not inside the Wix editor canvas. (5) Set
+    the element's height so the widget isn't cropped — it's responsive and will size itself to
+    the width you give it.
   </div>
 </div>
 
@@ -121,16 +135,27 @@ import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
+// ─────────────────────────────────────────────────────────────────────────
+// CONFIG — the one thing you need to change to embed this on Wix.
+// Local relative paths only work when this file and the .glb sit together
+// on a real server (or on Wix, which serves everything over HTTPS already).
+// If you host the .glb elsewhere (Wix Media Manager, a CDN, GitHub Pages),
+// put its public HTTPS URL here instead.
+// ─────────────────────────────────────────────────────────────────────────
+const MASK_URL = 'https://static.wixstatic.com/3d/45c46c_6eff1bdf238c443ab162706b02b4035c.glb';
+
 const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
 const dotsCanvas = document.getElementById('dotsCanvas');
 const dotsCtx = dotsCanvas.getContext('2d');
 const viewfinder = document.getElementById('viewfinder');
 const statusEl = document.getElementById('status');
+const startBtn = document.getElementById('startBtn');
 const readout = document.getElementById('readout');
 const snapBtn = document.getElementById('snapBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const cShowDots = document.getElementById('cShowDots');
+const cAutoRefit = document.getElementById('cAutoRefit');
 const recalBtn = document.getElementById('recalBtn');
 const rFine = document.getElementById('rFine');
 const rDepth = document.getElementById('rDepth');
@@ -148,17 +173,21 @@ let autoScale = 1;
 let calibrationSamples = [];
 let isCalibrated = false;
 let baselineFaceWidthNDC = null;
+let baselineMetricProxy = null;   // width-in-NDC * depth, used to detect real size changes
 let smoothedFaceWidthNDC = null;
-const CALIBRATION_FRAMES = 40;
+let mismatchStreak = 0;
+const CALIBRATION_FRAMES = 22;         // ~0.4–0.7s of frames before first lock-in
+const REFIT_MISMATCH_RATIO = 0.32;     // >32% deviation from the calibrated real size…
+const REFIT_MISMATCH_FRAMES = 18;      // …sustained this many frames → auto re-fit
 const CHEEK_L = 234, CHEEK_R = 454;
 // A handful of landmark indices used just to draw visible tracking marks:
 // cheeks, nose tip, chin, forehead, outer eye corners.
 const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
 let dragging = false, dragStart = {x:0,y:0};
 let manualOffset = {x:0, y:0};
+let cameraStarted = false;
 
 function setViewfinderAspect(w, h){
-  viewfinder.style.aspectRatio = `${w} / ${h}`;
   dotsCanvas.width = w;
   dotsCanvas.height = h;
 }
@@ -167,22 +196,40 @@ function startRecalibration(){
   calibrationSamples = [];
   isCalibrated = false;
   baselineFaceWidthNDC = null;
+  baselineMetricProxy = null;
   smoothedFaceWidthNDC = null;
+  mismatchStreak = 0;
 }
+
+startBtn.addEventListener('click', ()=>{
+  if(cameraStarted) return;
+  cameraStarted = true;
+  startBtn.disabled = true;
+  startBtn.textContent = 'Starting…';
+  startCamera();
+});
 
 async function startCamera(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width:{ideal:640}, height:{ideal:480} }, audio:false });
     video.srcObject = stream;
     await new Promise(res=> video.onloadedmetadata = res);
+    await video.play();
     setViewfinderAspect(video.videoWidth, video.videoHeight);
     initThree();
-    statusEl.textContent = 'Loading face tracking + mask…';
+    statusEl.innerHTML = 'Loading face tracking + mask…';
     await Promise.all([loadTracking(), loadMask()]);
     statusEl.classList.add('hidden');
     requestAnimationFrame(loop);
   }catch(err){
-    statusEl.innerHTML = "Camera access was blocked or unavailable.<br>Check the browser's camera permission and reload.";
+    console.error(err);
+    statusEl.innerHTML =
+      "Camera access was blocked or unavailable.<br>" +
+      "If this is embedded on Wix, open the embed element's settings and enable camera " +
+      "permission for it, then reload the published page.<br>" +
+      "<button class='start-btn' id='retryBtn' style='margin-top:10px;'>Try again</button>";
+    const retry = document.getElementById('retryBtn');
+    if(retry) retry.addEventListener('click', ()=>{ cameraStarted = false; startBtn.click(); });
   }
 }
 
@@ -231,7 +278,8 @@ async function loadTracking(){
 function loadMask(){
   return new Promise((resolve)=>{
     const loader = new GLTFLoader();
-    loader.load('./oni_no_face_mask.glb', (gltf)=>{
+    loader.setCrossOrigin('anonymous');
+    loader.load(MASK_URL, (gltf)=>{
       maskModel = gltf.scene;
       maskModel.traverse(o=>{ if(o.isMesh){ o.frustumCulled = false; } });
       maskGroup.add(maskModel);
@@ -249,9 +297,9 @@ function loadMask(){
     }, undefined, (err)=>{
       console.error('mask load failed', err);
       statusEl.classList.remove('hidden');
-      statusEl.innerHTML = "Couldn't load the mask file (oni_no_face_mask.glb).<br>" +
-        "If you opened this file by double-clicking it, your browser is blocking local file access.<br>" +
-        "Run it from a local server instead — see the note below the demo.";
+      statusEl.innerHTML = "Couldn't load the mask model.<br>" +
+        "Check that MASK_URL near the top of the script points to a reachable, CORS-enabled " +
+        "HTTPS link (Wix Media Manager file links, or a CDN link, both work).";
       resolve();
     });
   });
@@ -305,45 +353,75 @@ function applyCalibratedMatrix(){
     );
   }
 
-  // Live face width from the actual tracked marks (cheek landmarks), each frame.
+  // Live face width from the actual tracked marks (cheek landmarks), each frame,
+  // plus the face's live depth (how far it is from the camera) so we can tell
+  // "same face moved closer" apart from "a genuinely different-size face".
   let liveFaceWidthNDC = null;
+  let liveDepth = null;
   if(lastFaceLandmarks && lastFaceLandmarks[CHEEK_L] && lastFaceLandmarks[CHEEK_R]){
     const lm = lastFaceLandmarks;
     liveFaceWidthNDC = Math.abs((lm[CHEEK_R].x*2-1) - (lm[CHEEK_L].x*2-1));
     // Smooth so single-frame landmark noise doesn't make the mask visibly
-    // pulse in size, while still tracking real changes (moving closer/farther,
-    // a different face) within a few frames.
+    // pulse in size, while still tracking real changes within a few frames.
     smoothedFaceWidthNDC = (smoothedFaceWidthNDC === null)
       ? liveFaceWidthNDC
-      : smoothedFaceWidthNDC + (liveFaceWidthNDC - smoothedFaceWidthNDC) * 0.08;
+      : smoothedFaceWidthNDC + (liveFaceWidthNDC - smoothedFaceWidthNDC) * 0.15;
+  }
+  if(trackingReady && lastMatrixData){
+    liveDepth = Math.abs(lastMatrixData[14]) || null;
   }
 
   // Calibration: for the first CALIBRATION_FRAMES frames after a face is seen,
   // sample what scale makes the mask's projected width match the real face
-  // width, AND record the face width itself as the baseline. Take the median
-  // of both (robust to noisy single-frame jitter) once enough samples exist.
+  // width, AND record the face width + depth as the baseline "real size"
+  // fingerprint. Take the median of samples (robust to single-frame jitter).
   if(!isCalibrated && maskHalfExtents && liveFaceWidthNDC !== null){
     const maskWidthNDC = projectedMaskWidthNDC(base);
     if(maskWidthNDC > 0.0001 && isFinite(maskWidthNDC)){
-      calibrationSamples.push({ ratio: liveFaceWidthNDC / maskWidthNDC, width: liveFaceWidthNDC });
-      readout.textContent = `TRACKING: 3D FACE MESH — CALIBRATING (${calibrationSamples.length}/${CALIBRATION_FRAMES})…`;
+      calibrationSamples.push({
+        ratio: liveFaceWidthNDC / maskWidthNDC,
+        width: liveFaceWidthNDC,
+        metric: liveDepth ? liveFaceWidthNDC * liveDepth : null
+      });
+      readout.textContent = `TRACKING: 3D FACE MESH — FITTING (${calibrationSamples.length}/${CALIBRATION_FRAMES})…`;
       if(calibrationSamples.length >= CALIBRATION_FRAMES){
         const ratios = calibrationSamples.map(s=>s.ratio).sort((a,b)=>a-b);
         const widths = calibrationSamples.map(s=>s.width).sort((a,b)=>a-b);
+        const metrics = calibrationSamples.map(s=>s.metric).filter(m=>m!==null).sort((a,b)=>a-b);
         autoScale = ratios[Math.floor(ratios.length/2)];
         baselineFaceWidthNDC = widths[Math.floor(widths.length/2)];
+        baselineMetricProxy = metrics.length ? metrics[Math.floor(metrics.length/2)] : null;
         isCalibrated = true;
+        mismatchStreak = 0;
       }
     }
   }
 
   // Once calibrated, keep scaling live off the actual tracked marks: if the
   // face is currently wider/narrower on screen than it was at calibration time
-  // (closer, farther, a different person), scale proportionally to match.
+  // (closer / farther), scale proportionally to match — this already looks
+  // correct optically because apparent width naturally encodes perspective.
   let liveRatio = 1;
   if(isCalibrated && baselineFaceWidthNDC && smoothedFaceWidthNDC !== null){
     liveRatio = smoothedFaceWidthNDC / baselineFaceWidthNDC;
     readout.textContent = 'TRACKING: 3D FACE MESH (FOLLOWING MARKS)';
+  }
+
+  // Detect a genuinely different-size face (not just distance change) by
+  // comparing a depth-normalized "metric" proxy against the calibrated one,
+  // and auto re-fit if it stays off for a sustained run of frames.
+  if(cAutoRefit.checked && isCalibrated && baselineMetricProxy && liveDepth && smoothedFaceWidthNDC !== null){
+    const liveMetric = smoothedFaceWidthNDC * liveDepth;
+    const dev = Math.abs(liveMetric - baselineMetricProxy) / baselineMetricProxy;
+    if(dev > REFIT_MISMATCH_RATIO){
+      mismatchStreak++;
+      if(mismatchStreak >= REFIT_MISMATCH_FRAMES){
+        startRecalibration();
+        return; // resume fitting fresh on the next frame
+      }
+    } else {
+      mismatchStreak = 0;
+    }
   }
 
   const finalScale = autoScale * liveRatio * fine;
@@ -370,7 +448,7 @@ async function loop(){
 
   drawTrackingDots();
 
-  if(maskGroup){
+  if(maskGroup && maskHalfExtents){
     applyCalibratedMatrix();
     renderer.render(scene, camera);
   }
@@ -382,13 +460,11 @@ function drawTrackingDots(){
   if(!cShowDots.checked || !lastFaceLandmarks) return;
   dotsCtx.fillStyle = '#c4ff4d';
   dotsCtx.strokeStyle = 'rgba(196,255,77,0.5)';
-  const pts = [];
   for(const idx of MARK_POINTS){
     const lm = lastFaceLandmarks[idx];
     if(!lm) continue;
     const x = lm.x * dotsCanvas.width;
     const y = lm.y * dotsCanvas.height;
-    pts.push([x,y]);
     dotsCtx.beginPath();
     dotsCtx.arc(x, y, 3, 0, Math.PI*2);
     dotsCtx.fill();
@@ -417,8 +493,6 @@ snapBtn.addEventListener('click', ()=>{
 });
 
 recalBtn.addEventListener('click', startRecalibration);
-
-startCamera();
 </script>
 </body>
 </html>
