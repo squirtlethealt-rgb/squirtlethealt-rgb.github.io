@@ -2,166 +2,147 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gaganyatri Lens — ISRO Anniversary AR Spacesuit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Gaganyatri Lens</title>
 <style>
   :root{
     --saffron:#FF9933;
-    --saffron-dim:#c97a29;
     --white:#FFFFFF;
     --green:#138808;
-    --green-dim:#0c5e06;
     --chakra:#0b1f6b;
-    --ink:#0a0c14;
-    --panel:#12141f;
-    --paper:#f4f1e8;
-    --warn:#ff6b4d;
-    --mono:'IBM Plex Mono', 'Courier New', monospace;
-    --sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --glass:rgba(10,12,20,0.42);
+    --glass-border:rgba(255,255,255,0.16);
   }
-  *{box-sizing:border-box;}
-  html,body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);min-height:100%;}
-  .tricolor-strip{height:6px;width:100%;background:linear-gradient(90deg,var(--saffron) 0 33.3%, var(--white) 33.3% 66.6%, var(--green) 66.6% 100%);}
-  .rig{max-width:520px;width:100%;margin:0 auto;padding:16px 16px 28px;}
-  .masthead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:10px;}
-  .masthead .brand{display:flex;align-items:center;gap:10px;}
-  .chakra{width:30px;height:30px;flex:0 0 30px;animation:spin 9s linear infinite;}
-  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-  .masthead h1{font-size:15px;margin:0;font-weight:800;letter-spacing:0.02em;color:var(--paper);line-height:1.2;}
-  .masthead .sub{font-family:var(--mono);font-size:10px;color:var(--saffron);letter-spacing:0.06em;margin-top:1px;}
-  .masthead .rec{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--green);font-family:var(--mono);white-space:nowrap;}
-  .rec .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);animation:pulse 1.6s ease-in-out infinite;}
-  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
-  .anniv-banner{font-family:var(--mono);font-size:10.5px;letter-spacing:0.04em;text-align:center;color:var(--ink);background:linear-gradient(90deg,var(--saffron),var(--white) 50%,var(--green));padding:5px 8px;border-radius:3px;margin:10px 0 14px;font-weight:700;}
-  .viewfinder{position:relative;width:100%;background:#000;border-radius:4px;overflow:hidden;border:1.5px solid var(--saffron-dim);aspect-ratio:4/3;box-shadow:0 0 0 1px var(--chakra) inset;}
-  .viewfinder video{width:100%;height:100%;object-fit:contain;transform:scaleX(-1);display:block;background:#000;}
-  .viewfinder canvas.gl{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;}
-  .viewfinder canvas.dots{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;z-index:3;}
-  .corner{position:absolute;width:18px;height:18px;border:1.5px solid var(--saffron);opacity:0.9;pointer-events:none;z-index:4;}
-  .corner.tl{top:10px;left:10px;border-right:none;border-bottom:none;}
-  .corner.tr{top:10px;right:10px;border-left:none;border-bottom:none;}
-  .corner.bl{bottom:10px;left:10px;border-right:none;border-top:none;}
-  .corner.br{bottom:10px;right:10px;border-left:none;border-top:none;}
-  .readout{position:absolute;bottom:10px;left:14px;font-family:var(--mono);font-size:10px;color:var(--green);letter-spacing:0.05em;text-shadow:0 1px 2px rgba(0,0,0,0.7);z-index:5;}
-  .flagmark{position:absolute;bottom:10px;right:12px;font-size:16px;z-index:5;text-shadow:0 1px 2px rgba(0,0,0,0.6);}
-  .status-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;font-family:var(--mono);font-size:12px;color:#c9cbb8;background:rgba(10,12,20,0.94);z-index:6;}
-  .status-overlay.hidden{display:none;}
-  .start-btn{background:linear-gradient(90deg,var(--saffron),#ffb663);color:var(--ink);border:none;font-family:var(--sans);font-weight:800;font-size:14px;padding:13px 26px;border-radius:3px;cursor:pointer;}
-  .panel{background:var(--panel);border:1px solid #262a3a;border-left:3px solid var(--saffron-dim);border-radius:3px;margin-top:12px;padding:12px 14px;}
-  .panel summary{font-family:var(--mono);font-size:11px;letter-spacing:0.05em;color:#9aa0c9;cursor:pointer;font-weight:600;}
-  .slider-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
-  .slider-row label{font-family:var(--mono);font-size:10px;width:64px;flex:0 0 64px;color:#8f95b8;}
-  .slider-row input[type=range]{flex:1;accent-color:var(--saffron);}
-  .controls{display:flex;gap:10px;margin-top:14px;}
-  .main-btn{flex:1;background:linear-gradient(90deg,var(--green),var(--green-dim));color:var(--paper);border:none;font-family:var(--sans);font-weight:800;font-size:13px;padding:13px;border-radius:3px;cursor:pointer;letter-spacing:0.01em;}
-  .main-btn:active{transform:translateY(1px);}
-  .ghost-btn{background:transparent;border:1px solid var(--saffron-dim);color:var(--paper);font-family:var(--sans);font-size:13px;padding:13px 16px;border-radius:3px;cursor:pointer;}
-  .footnote{margin-top:16px;font-family:var(--mono);font-size:10px;color:#7d82a3;line-height:1.65;letter-spacing:0.02em;}
-  .footnote b{color:#b9beDD;}
-  .footnote .hl{color:var(--saffron);}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+  html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none;}
+  .stage{position:fixed;inset:0;background:#000;touch-action:none;}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#000;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);pointer-events:none;}
+  canvas.dots{z-index:3;}
+
+  .status-dot{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;background:#777;z-index:12;box-shadow:0 0 8px #777;transition:background .25s,box-shadow .25s;}
+  .status-dot.fitting{background:var(--saffron);box-shadow:0 0 8px var(--saffron);animation:blink 0.9s ease-in-out infinite;}
+  .status-dot.locked{background:var(--green);box-shadow:0 0 8px var(--green);}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+  .top-bar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 14px;z-index:11;}
+  .brand{width:32px;height:32px;animation:spin 9s linear infinite;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));}
+  @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+  .top-actions{display:flex;gap:10px;}
+
+  .icon-btn{width:40px;height:40px;border-radius:50%;background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--glass-border);display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;}
+  .icon-btn svg{width:19px;height:19px;}
+  .icon-btn.active{border-color:var(--saffron);color:var(--saffron);}
+  .icon-btn:active{transform:scale(0.92);}
+
+  .bottom-bar{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:11;}
+  .side-slot{width:50px;height:50px;display:flex;align-items:center;justify-content:center;}
+  .thumb{width:100%;height:100%;border-radius:14px;overflow:hidden;border:2px solid rgba(255,255,255,0.7);background:#111;display:none;cursor:pointer;}
+  .thumb img{width:100%;height:100%;object-fit:cover;}
+
+  .shutter{width:74px;height:74px;border-radius:50%;padding:4px;cursor:pointer;background:conic-gradient(var(--saffron) 0 33%, var(--white) 33% 66%, var(--green) 66% 100%);}
+  .shutter:active{transform:scale(0.94);}
+  .shutter-inner{width:100%;height:100%;border-radius:50%;background:#fff;}
+
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:15;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .sheet-backdrop.open{opacity:1;pointer-events:auto;}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:#12141fee;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:20px 20px 0 0;padding:10px 20px calc(env(safe-area-inset-bottom,0px) + 20px);transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);z-index:16;border-top:2px solid var(--saffron);}
+  .sheet.open{transform:translateY(0);}
+  .sheet-handle{width:36px;height:4px;border-radius:3px;background:#444;margin:6px auto 14px;}
+  .sheet-row{display:flex;align-items:center;gap:14px;padding:10px 0;}
+  .sheet-row svg{width:20px;height:20px;flex:0 0 20px;color:#c7cae6;}
+  .sheet-row input[type=range]{flex:1;accent-color:var(--saffron);}
+  .toggle-row{display:flex;gap:10px;padding:8px 0 4px;}
+  .toggle-row .icon-btn{background:#1c1f30;}
+
+  .start-overlay{position:absolute;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:20;}
+  .start-overlay.hidden{display:none;}
+  .start-ring{width:84px;height:84px;border-radius:50%;padding:5px;background:conic-gradient(var(--saffron),var(--white) 33%,var(--white) 66%,var(--green));cursor:pointer;}
+  .start-ring-inner{width:100%;height:100%;border-radius:50%;background:#0a0c14;display:flex;align-items:center;justify-content:center;color:#fff;}
+  .start-ring-inner svg{width:32px;height:32px;}
+  .start-ring.spinning .start-ring-inner svg{animation:spin 1s linear infinite;}
+  .start-ring.err{background:conic-gradient(#ff6b4d,#ff6b4d);}
 </style>
 </head>
 <body>
-<div class="tricolor-strip"></div>
 
-<div class="rig">
-  <div class="masthead">
-    <div class="brand">
-      <svg class="chakra" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <circle cx="50" cy="50" r="44" fill="none" stroke="#0b1f6b" stroke-width="4"/>
-        <circle cx="50" cy="50" r="4" fill="#0b1f6b"/>
-        <g stroke="#0b1f6b" stroke-width="2.4">
-          <!-- 24 spokes -->
-          <line x1="50" y1="6" x2="50" y2="94"/><line x1="6" y1="50" x2="94" y2="50"/>
-          <line x1="12.9" y1="12.9" x2="87.1" y2="87.1"/><line x1="12.9" y1="87.1" x2="87.1" y2="12.9"/>
-          <line x1="24" y1="4.5" x2="76" y2="95.5"/><line x1="76" y1="4.5" x2="24" y2="95.5"/>
-          <line x1="4.5" y1="24" x2="95.5" y2="76"/><line x1="4.5" y1="76" x2="95.5" y2="24"/>
-          <line x1="34" y1="1.5" x2="66" y2="98.5"/><line x1="66" y1="1.5" x2="34" y2="98.5"/>
-          <line x1="1.5" y1="34" x2="98.5" y2="66"/><line x1="1.5" y1="66" x2="98.5" y2="34"/>
-        </g>
-      </svg>
-      <div>
-        <h1>GAGANYATRI LENS</h1>
-        <div class="sub">AR SPACESUIT · ISRO ANNIVERSARY EDITION</div>
+<div class="stage" id="stage">
+  <video id="video" playsinline muted></video>
+  <canvas class="gl" id="glCanvas"></canvas>
+  <canvas class="dots" id="dotsCanvas"></canvas>
+
+  <div class="status-dot" id="statusDot"></div>
+
+  <div class="top-bar">
+    <svg class="brand" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="50" cy="50" r="44" fill="none" stroke="#0b1f6b" stroke-width="5"/>
+      <circle cx="50" cy="50" r="5" fill="#0b1f6b"/>
+      <g stroke="#0b1f6b" stroke-width="2.6">
+        <line x1="50" y1="6" x2="50" y2="94"/><line x1="6" y1="50" x2="94" y2="50"/>
+        <line x1="12.9" y1="12.9" x2="87.1" y2="87.1"/><line x1="12.9" y1="87.1" x2="87.1" y2="12.9"/>
+        <line x1="24" y1="4.5" x2="76" y2="95.5"/><line x1="76" y1="4.5" x2="24" y2="95.5"/>
+        <line x1="4.5" y1="24" x2="95.5" y2="76"/><line x1="4.5" y1="76" x2="95.5" y2="24"/>
+        <line x1="34" y1="1.5" x2="66" y2="98.5"/><line x1="66" y1="1.5" x2="34" y2="98.5"/>
+        <line x1="1.5" y1="34" x2="98.5" y2="66"/><line x1="1.5" y1="66" x2="98.5" y2="34"/>
+      </g>
+    </svg>
+    <div class="top-actions">
+      <button class="icon-btn" id="flipBtn" aria-label="flip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </button>
+      <button class="icon-btn active" id="dotsBtn" aria-label="tracking marks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="1.6"/><circle cx="12" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/><circle cx="6" cy="18" r="1.6"/><circle cx="12" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" aria-label="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="side-slot">
+      <button class="icon-btn" id="recalBtn" aria-label="recalibrate">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-9.36L1 10"/></svg>
+      </button>
+    </div>
+    <div class="shutter" id="snapBtn"><div class="shutter-inner"></div></div>
+    <div class="side-slot">
+      <div class="thumb" id="thumb"><img id="thumbImg" alt=""></div>
+    </div>
+  </div>
+
+  <div class="start-overlay" id="status">
+    <div class="start-ring" id="startBtn">
+      <div class="start-ring-inner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </div>
     </div>
-    <div class="rec"><span class="dot"></span>LIVE</div>
   </div>
+</div>
 
-  <div class="anniv-banner">🚀 जय हिंद · CELEBRATING ISRO'S JOURNEY TO THE STARS 🇮🇳</div>
-
-  <div class="viewfinder" id="viewfinder">
-    <video id="video" playsinline muted></video>
-    <canvas class="gl" id="glCanvas"></canvas>
-    <canvas class="dots" id="dotsCanvas"></canvas>
-    <div class="corner tl"></div><div class="corner tr"></div>
-    <div class="corner bl"></div><div class="corner br"></div>
-    <div class="readout" id="readout">TRACKING: —</div>
-    <div class="flagmark">🇮🇳</div>
-    <div class="status-overlay" id="status">
-      <div>Tap to suit up, Gaganyatri</div>
-      <button class="start-btn" id="startBtn">Enable camera</button>
-    </div>
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-row">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+    <input type="range" id="rFine" min="0.5" max="2" step="0.01" value="1">
   </div>
-
-  <details class="panel" open>
-    <summary>MISSION TRACKING</summary>
-    <div class="slider-row"><label>Points</label>
-      <label style="width:auto;flex:1;display:flex;align-items:center;gap:6px;color:var(--paper);font-family:var(--sans);font-size:12px;">
-        <input type="checkbox" id="cShowDots" checked style="accent-color:var(--saffron);"> show tracking marks
-      </label>
-    </div>
-    <div class="slider-row"><label></label>
-      <label style="width:auto;flex:1;display:flex;align-items:center;gap:6px;color:var(--paper);font-family:var(--sans);font-size:12px;">
-        <input type="checkbox" id="cAutoRefit" checked style="accent-color:var(--saffron);"> auto re-fit when a new/different face appears
-      </label>
-    </div>
-    <div class="slider-row"><label></label>
-      <label style="width:auto;flex:1;display:flex;align-items:center;gap:6px;color:var(--paper);font-family:var(--sans);font-size:12px;">
-        <input type="checkbox" id="cFlip180" style="accent-color:var(--saffron);"> flip suit 180° (if it faces away from camera)
-      </label>
-    </div>
-    <div class="slider-row"><label></label>
-      <button class="ghost-btn" id="recalBtn" style="width:100%;padding:8px;">Recalibrate suit fit now</button>
-    </div>
-  </details>
-
-  <details class="panel">
-    <summary>FINE-TUNE (optional — sizing/anchoring is automatic)</summary>
-    <div class="slider-row"><label>Size ×</label><input type="range" id="rFine" min="0.5" max="2" step="0.01" value="1"></div>
-    <div class="slider-row"><label>Depth</label><input type="range" id="rDepth" min="-40" max="40" step="0.5" value="0"></div>
-    <div class="slider-row"><label>Height</label><input type="range" id="rHeight" min="-120" max="120" step="0.5" value="0"></div>
-    <div class="slider-row"><label>Tilt</label><input type="range" id="rTilt" min="-45" max="45" step="1" value="0"></div>
-  </details>
-
-  <div class="controls">
-    <button class="main-btn" id="snapBtn">Capture frame</button>
-    <button class="ghost-btn" id="downloadBtn" style="display:none;">Save</button>
+  <div class="sheet-row">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 0 20"/><path d="M12 2a15.3 15.3 0 0 0 0 20"/></svg>
+    <input type="range" id="rDepth" min="-40" max="40" step="0.5" value="0">
   </div>
-
-  <div class="footnote">
-    <span class="hl">HOW IT WORKS:</span> on-device face-mesh tracking follows the cheek/nose/chin marks
-    shown as tracking dots. The suit's <b>helmet region</b> is auto-detected from the 3D model on load
-    and used as the anchor point — so the helmet locks to your head/face while the rest of the suit
-    hangs below it at the correct proportion. Sizing then keeps rescaling live off the tracked distance
-    between your cheeks, just like the face width calibrates a mask — closer, farther, or a different
-    face will re-fit automatically when "auto re-fit" is on.
-    <br><br>
-    <span class="hl">FRAMING TIP:</span> since this is a full body suit anchored from your face, step back
-    from the camera so your torso is in frame too, not just your face — otherwise the suit will appear
-    zoomed in. Use <b>Size ×</b> and <b>Height</b> in Fine-tune to nudge the fit once you can see yourself.
-    If the suit appears to be facing backward, tick <b>"flip suit 180°"</b> above.
-    <br><br>
-    <span class="hl">EMBEDDING ON WIX:</span> (1) The suit model link is already set to your Wix Media
-    file (<b>Advanced_Crew_Escape_Suit.glb</b>) in <b>SUIT_URL</b> near the top of the &lt;script&gt;
-    below — replace it if you re-upload. (2) In Wix, add this via an "Embed Code → Embed a Widget / HTML
-    iframe" element and paste this whole file's contents in, or upload it as a custom-code file.
-    (3) Open that element's settings and make sure <b>camera permission</b> is allowed for the embed
-    (Wix's embed panel has a permissions toggle for camera/mic — turn it on, otherwise the browser
-    silently blocks the camera inside the iframe). (4) Camera access only works on the
-    <b>published</b> site or Preview mode over HTTPS, not inside the Wix editor canvas. (5) Set the
-    element's height so the widget isn't cropped — it's responsive and will size itself to the width
-    you give it.
+  <div class="sheet-row">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+    <input type="range" id="rHeight" min="-120" max="120" step="0.5" value="0">
+  </div>
+  <div class="sheet-row">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.5-7.1"/><polyline points="21 3 21 9 15 9"/></svg>
+    <input type="range" id="rTilt" min="-45" max="45" step="1" value="0">
+  </div>
+  <div class="toggle-row">
+    <button class="icon-btn active" id="autoRefitBtn" aria-label="auto refit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+    </button>
   </div>
 </div>
 
@@ -180,7 +161,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG — the one thing you need to change to re-embed this on Wix with a
-// different suit upload. Already pointed at your published Wix Media link.
+// different suit upload.
 // ─────────────────────────────────────────────────────────────────────────
 const SUIT_URL = 'https://static.wixstatic.com/3d/45c46c_a988569f5b6b4399b46fab26ed219a0e.glb';
 
@@ -188,20 +169,29 @@ const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
 const dotsCanvas = document.getElementById('dotsCanvas');
 const dotsCtx = dotsCanvas.getContext('2d');
-const viewfinder = document.getElementById('viewfinder');
 const statusEl = document.getElementById('status');
 const startBtn = document.getElementById('startBtn');
-const readout = document.getElementById('readout');
+const statusDot = document.getElementById('statusDot');
 const snapBtn = document.getElementById('snapBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-const cShowDots = document.getElementById('cShowDots');
-const cAutoRefit = document.getElementById('cAutoRefit');
-const cFlip180 = document.getElementById('cFlip180');
+const thumb = document.getElementById('thumb');
+const thumbImg = document.getElementById('thumbImg');
+const flipBtn = document.getElementById('flipBtn');
+const dotsBtn = document.getElementById('dotsBtn');
+const settingsBtn = document.getElementById('settingsBtn');
 const recalBtn = document.getElementById('recalBtn');
+const sheet = document.getElementById('sheet');
+const sheetBackdrop = document.getElementById('sheetBackdrop');
+const autoRefitBtn = document.getElementById('autoRefitBtn');
 const rFine = document.getElementById('rFine');
 const rDepth = document.getElementById('rDepth');
 const rHeight = document.getElementById('rHeight');
 const rTilt = document.getElementById('rTilt');
+
+// Icon-toggle state (replaces the old checkbox inputs — same booleans, just
+// driven by tap instead of a labelled checkbox).
+let showDots = true;
+let autoRefit = true;
+let flip180 = false;
 
 let faceLandmarker = null;
 let trackingReady = false;
@@ -214,15 +204,13 @@ let autoScale = 1;
 let calibrationSamples = [];
 let isCalibrated = false;
 let baselineFaceWidthNDC = null;
-let baselineMetricProxy = null;   // width-in-NDC * depth, used to detect real size changes
+let baselineMetricProxy = null;
 let smoothedFaceWidthNDC = null;
 let mismatchStreak = 0;
-const CALIBRATION_FRAMES = 22;         // ~0.4–0.7s of frames before first lock-in
-const REFIT_MISMATCH_RATIO = 0.32;     // >32% deviation from the calibrated real size…
-const REFIT_MISMATCH_FRAMES = 18;      // …sustained this many frames → auto re-fit
+const CALIBRATION_FRAMES = 22;
+const REFIT_MISMATCH_RATIO = 0.32;
+const REFIT_MISMATCH_FRAMES = 18;
 const CHEEK_L = 234, CHEEK_R = 454;
-// A handful of landmark indices used just to draw visible tracking marks:
-// cheeks, nose tip, chin, forehead, outer eye corners.
 const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
 let dragging = false, dragStart = {x:0,y:0};
 let manualOffset = {x:0, y:0};
@@ -240,43 +228,42 @@ function startRecalibration(){
   baselineMetricProxy = null;
   smoothedFaceWidthNDC = null;
   mismatchStreak = 0;
+  statusDot.className = 'status-dot';
 }
 
 startBtn.addEventListener('click', ()=>{
   if(cameraStarted) return;
   cameraStarted = true;
-  startBtn.disabled = true;
-  startBtn.textContent = 'Starting…';
+  startBtn.classList.add('spinning');
   startCamera();
 });
 
 async function startCamera(){
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width:{ideal:640}, height:{ideal:480} }, audio:false });
+    const targetAR = window.innerWidth / window.innerHeight;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', aspectRatio: { ideal: targetAR }, width:{ideal:1280}, height:{ideal:1280/targetAR} },
+      audio:false
+    });
     video.srcObject = stream;
     await new Promise(res=> video.onloadedmetadata = res);
     await video.play();
     setViewfinderAspect(video.videoWidth, video.videoHeight);
     initThree();
-    statusEl.innerHTML = 'Loading face tracking + spacesuit…';
     await Promise.all([loadTracking(), loadSuit()]);
     statusEl.classList.add('hidden');
     requestAnimationFrame(loop);
   }catch(err){
     console.error(err);
-    statusEl.innerHTML =
-      "Camera access was blocked or unavailable.<br>" +
-      "If this is embedded on Wix, open the embed element's settings and enable camera " +
-      "permission for it, then reload the published page.<br>" +
-      "<button class='start-btn' id='retryBtn' style='margin-top:10px;'>Try again</button>";
-    const retry = document.getElementById('retryBtn');
-    if(retry) retry.addEventListener('click', ()=>{ cameraStarted = false; startBtn.click(); });
+    startBtn.classList.remove('spinning');
+    startBtn.classList.add('err');
+    cameraStarted = false;
   }
 }
 
 function initThree(){
   renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha:true, antialias:true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.75));
   renderer.setSize(video.videoWidth, video.videoHeight, false);
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(63, video.videoWidth/video.videoHeight, 1, 5000);
@@ -311,27 +298,19 @@ async function loadTracking(){
       numFaces: 1
     });
     trackingReady = true;
-    readout.textContent = 'TRACKING: 3D FACE MESH (AUTO)';
   }catch(e){
     usingFallback = true;
-    readout.textContent = 'TRACKING: MANUAL (DRAG)';
     enableDragFallback();
   }
 }
 
-// The uploaded suit model is authored Z-up (a common Blender export quirk)
-// rather than glTF's expected Y-up, and is a single full-body mesh (helmet
-// down to boots) rather than a face-shaped mask. So instead of just
-// re-centering on the whole model's bounding box (which would put the belly,
-// not the head, at the tracked face), we:
-//   1) scan every vertex to find the true bounding box,
-//   2) treat the top ~15% band (in the model's original "tall" axis) as the
-//      helmet region, and compute ITS bounding box separately,
-//   3) re-center the whole model's pivot on that helmet region's center, and
-//   4) use the helmet region's width (not the full body's width) as the
-//      scale-calibration target, so the helmet — not the shoulders — matches
-//      the tracked face width. The rest of the suit then hangs correctly
-//      below it, at true proportion.
+// The suit model is a single full-body mesh (helmet to boots), authored
+// Z-up (a common Blender export quirk) rather than glTF's expected Y-up.
+// We scan every vertex to find the true bounding box, treat the top ~15%
+// band (in the model's "tall" axis) as the helmet region, re-center the
+// pivot there, and use ONLY that region's width for scale calibration —
+// so the helmet (not the shoulders) matches the tracked face, and the rest
+// of the suit hangs below it at true proportion.
 function loadSuit(){
   return new Promise((resolve)=>{
     const loader = new GLTFLoader();
@@ -341,7 +320,6 @@ function loadSuit(){
       maskModel.traverse(o=>{ if(o.isMesh){ o.frustumCulled = false; } });
       maskModel.updateMatrixWorld(true);
 
-      // Pass 1: full bounding box across every mesh's vertices.
       let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
       const v = new THREE.Vector3();
       maskModel.traverse(o=>{
@@ -357,8 +335,6 @@ function loadSuit(){
         }
       });
 
-      // Figure out which raw axis is "tall" (the standing height axis) —
-      // it's whichever span is clearly the largest of the three.
       const spanX = maxX-minX, spanY = maxY-minY, spanZ = maxZ-minZ;
       const spans = [{axis:'x',span:spanX},{axis:'y',span:spanY},{axis:'z',span:spanZ}].sort((a,b)=>b.span-a.span);
       const tallAxis = spans[0].axis;
@@ -367,10 +343,9 @@ function loadSuit(){
       const tallMax = tallAxis==='x'?maxX:(tallAxis==='y'?maxY:maxZ);
       const tallMin = tallAxis==='x'?minX:(tallAxis==='y'?minY:minZ);
       const tallSpan = tallMax - tallMin;
-      const HEAD_BAND = 0.15; // top 15% of standing height ≈ helmet + neck ring
+      const HEAD_BAND = 0.15;
       const threshold = tallMax - HEAD_BAND*tallSpan;
 
-      // Pass 2: bounding box of just the vertices in that top band (the helmet).
       let hMinX=Infinity,hMaxX=-Infinity,hMinY=Infinity,hMaxY=-Infinity,hMinZ=Infinity,hMaxZ=-Infinity;
       maskModel.traverse(o=>{
         if(o.isMesh && o.geometry && o.geometry.attributes.position){
@@ -390,23 +365,17 @@ function loadSuit(){
       const headCenter = new THREE.Vector3((hMinX+hMaxX)/2, (hMinY+hMaxY)/2, (hMinZ+hMaxZ)/2);
       const headHalf = new THREE.Vector3((hMaxX-hMinX)/2, (hMaxY-hMinY)/2, (hMaxZ-hMinZ)/2);
 
-      // Re-center pivot on the helmet, in the model's original (raw) axes.
       maskModel.position.sub(headCenter);
 
-      // Correct the raw "tall" axis onto three.js's Y-up so the suit stands
-      // upright in the scene, keeping the pivot (now at the origin) fixed.
       orientationGroup = new THREE.Group();
       if(tallAxis === 'z'){
         orientationGroup.quaternion.setFromEuler(new THREE.Euler(-Math.PI/2, 0, 0));
       } else if(tallAxis === 'x'){
         orientationGroup.quaternion.setFromEuler(new THREE.Euler(0, 0, Math.PI/2));
-      } // tallAxis === 'y' → already correct orientation, no rotation needed
+      }
       orientationGroup.add(maskModel);
       maskGroup.add(orientationGroup);
 
-      // Half-extents used for scale calibration are the HELMET's, not the
-      // whole body's, so the tracked face width matches the helmet, and the
-      // rest of the suit follows at true scale beneath it.
       const halfOnTallAxis = tallAxis==='x'?headHalf.x:(tallAxis==='y'?headHalf.y:headHalf.z);
       const widthAxis = tallAxis==='z' ? 'x' : (tallAxis==='x' ? 'y' : 'x');
       const halfOnWidthAxis = widthAxis==='x'?headHalf.x:(widthAxis==='y'?headHalf.y:headHalf.z);
@@ -419,10 +388,6 @@ function loadSuit(){
       resolve();
     }, undefined, (err)=>{
       console.error('suit load failed', err);
-      statusEl.classList.remove('hidden');
-      statusEl.innerHTML = "Couldn't load the spacesuit model.<br>" +
-        "Check that SUIT_URL near the top of the script points to a reachable, CORS-enabled " +
-        "HTTPS link (Wix Media Manager file links, or a CDN link, both work).";
       resolve();
     });
   });
@@ -441,8 +406,6 @@ function enableDragFallback(){
   window.addEventListener('pointerup', ()=> dragging = false);
 }
 
-// Projects the helmet's 8 bounding-box corners (at a given world matrix) through
-// the camera and returns how wide it appears in normalized device space.
 function projectedMaskWidthNDC(worldMatrix){
   const h = maskHalfExtents;
   const corners = [
@@ -476,16 +439,11 @@ function applyCalibratedMatrix(){
     );
   }
 
-  // Live face width from the actual tracked marks (cheek landmarks), each frame,
-  // plus the face's live depth (how far it is from the camera) so we can tell
-  // "same face moved closer" apart from "a genuinely different-size face".
   let liveFaceWidthNDC = null;
   let liveDepth = null;
   if(lastFaceLandmarks && lastFaceLandmarks[CHEEK_L] && lastFaceLandmarks[CHEEK_R]){
     const lm = lastFaceLandmarks;
     liveFaceWidthNDC = Math.abs((lm[CHEEK_R].x*2-1) - (lm[CHEEK_L].x*2-1));
-    // Smooth so single-frame landmark noise doesn't make the suit visibly
-    // pulse in size, while still tracking real changes within a few frames.
     smoothedFaceWidthNDC = (smoothedFaceWidthNDC === null)
       ? liveFaceWidthNDC
       : smoothedFaceWidthNDC + (liveFaceWidthNDC - smoothedFaceWidthNDC) * 0.15;
@@ -494,10 +452,6 @@ function applyCalibratedMatrix(){
     liveDepth = Math.abs(lastMatrixData[14]) || null;
   }
 
-  // Calibration: for the first CALIBRATION_FRAMES frames after a face is seen,
-  // sample what scale makes the helmet's projected width match the real face
-  // width, AND record the face width + depth as the baseline "real size"
-  // fingerprint. Take the median of samples (robust to single-frame jitter).
   if(!isCalibrated && maskHalfExtents && liveFaceWidthNDC !== null){
     const maskWidthNDC = projectedMaskWidthNDC(base);
     if(maskWidthNDC > 0.0001 && isFinite(maskWidthNDC)){
@@ -506,7 +460,7 @@ function applyCalibratedMatrix(){
         width: liveFaceWidthNDC,
         metric: liveDepth ? liveFaceWidthNDC * liveDepth : null
       });
-      readout.textContent = `TRACKING: 3D FACE MESH — FITTING SUIT (${calibrationSamples.length}/${CALIBRATION_FRAMES})…`;
+      statusDot.className = 'status-dot fitting';
       if(calibrationSamples.length >= CALIBRATION_FRAMES){
         const ratios = calibrationSamples.map(s=>s.ratio).sort((a,b)=>a-b);
         const widths = calibrationSamples.map(s=>s.width).sort((a,b)=>a-b);
@@ -520,27 +474,20 @@ function applyCalibratedMatrix(){
     }
   }
 
-  // Once calibrated, keep scaling live off the actual tracked marks: if the
-  // face is currently wider/narrower on screen than it was at calibration time
-  // (closer / farther), scale proportionally to match — this already looks
-  // correct optically because apparent width naturally encodes perspective.
   let liveRatio = 1;
   if(isCalibrated && baselineFaceWidthNDC && smoothedFaceWidthNDC !== null){
     liveRatio = smoothedFaceWidthNDC / baselineFaceWidthNDC;
-    readout.textContent = 'TRACKING: 3D FACE MESH (FOLLOWING MARKS)';
+    statusDot.className = 'status-dot locked';
   }
 
-  // Detect a genuinely different-size face (not just distance change) by
-  // comparing a depth-normalized "metric" proxy against the calibrated one,
-  // and auto re-fit if it stays off for a sustained run of frames.
-  if(cAutoRefit.checked && isCalibrated && baselineMetricProxy && liveDepth && smoothedFaceWidthNDC !== null){
+  if(autoRefit && isCalibrated && baselineMetricProxy && liveDepth && smoothedFaceWidthNDC !== null){
     const liveMetric = smoothedFaceWidthNDC * liveDepth;
     const dev = Math.abs(liveMetric - baselineMetricProxy) / baselineMetricProxy;
     if(dev > REFIT_MISMATCH_RATIO){
       mismatchStreak++;
       if(mismatchStreak >= REFIT_MISMATCH_FRAMES){
         startRecalibration();
-        return; // resume fitting fresh on the next frame
+        return;
       }
     } else {
       mismatchStreak = 0;
@@ -548,7 +495,7 @@ function applyCalibratedMatrix(){
   }
 
   const finalScale = autoScale * liveRatio * fine;
-  const flipYaw = cFlip180.checked ? Math.PI : 0;
+  const flipYaw = flip180 ? Math.PI : 0;
   const calib = new THREE.Matrix4();
   calib.compose(
     new THREE.Vector3(0, height, depth),
@@ -565,8 +512,6 @@ async function loop(){
     if(results.facialTransformationMatrixes && results.facialTransformationMatrixes.length){
       lastMatrixData = results.facialTransformationMatrixes[0].data;
       lastFaceLandmarks = (results.faceLandmarks && results.faceLandmarks[0]) || lastFaceLandmarks;
-    } else {
-      readout.textContent = 'TRACKING: 3D FACE MESH (SEARCHING…)';
     }
   }
 
@@ -581,9 +526,8 @@ async function loop(){
 
 function drawTrackingDots(){
   dotsCtx.clearRect(0,0,dotsCanvas.width, dotsCanvas.height);
-  if(!cShowDots.checked || !lastFaceLandmarks) return;
+  if(!showDots || !lastFaceLandmarks) return;
   dotsCtx.fillStyle = '#FF9933';
-  dotsCtx.strokeStyle = 'rgba(255,153,51,0.5)';
   for(const idx of MARK_POINTS){
     const lm = lastFaceLandmarks[idx];
     if(!lm) continue;
@@ -606,18 +550,42 @@ snapBtn.addEventListener('click', ()=>{
   sctx.drawImage(glCanvas, 0, 0, shot.width, shot.height);
   sctx.setTransform(1,0,0,1,0,0);
   const dataUrl = shot.toDataURL('image/png');
-  downloadBtn.style.display = 'inline-block';
-  downloadBtn.onclick = ()=>{
+  thumbImg.src = dataUrl;
+  thumb.style.display = 'block';
+  thumb.onclick = ()=>{
     const a = document.createElement('a');
     a.href = dataUrl;
     a.download = 'gaganyatri-lens-capture.png';
     a.click();
   };
-  downloadBtn.textContent = 'Download capture';
 });
 
 recalBtn.addEventListener('click', startRecalibration);
-cFlip180.addEventListener('change', startRecalibration);
+
+flipBtn.addEventListener('click', ()=>{
+  flip180 = !flip180;
+  flipBtn.classList.toggle('active', flip180);
+  startRecalibration();
+});
+
+dotsBtn.addEventListener('click', ()=>{
+  showDots = !showDots;
+  dotsBtn.classList.toggle('active', showDots);
+});
+
+autoRefitBtn.addEventListener('click', ()=>{
+  autoRefit = !autoRefit;
+  autoRefitBtn.classList.toggle('active', autoRefit);
+});
+
+function openSheet(){ sheet.classList.add('open'); sheetBackdrop.classList.add('open'); }
+function closeSheet(){ sheet.classList.remove('open'); sheetBackdrop.classList.remove('open'); }
+settingsBtn.addEventListener('click', openSheet);
+sheetBackdrop.addEventListener('click', closeSheet);
+
+window.addEventListener('resize', ()=>{
+  if(renderer && video.videoWidth) renderer.setSize(video.videoWidth, video.videoHeight, false);
+});
 </script>
 </body>
 </html>
