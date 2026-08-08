@@ -163,74 +163,15 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 
-// ─────────────────────────────────────────────────────────────────────────
-// CONFIG
-//
-// SUIT_URL now points at the RIGGED suit (skeleton + skin weights, exported
-// from Blender after the Mixamo auto-rig pass). It's no longer Draco
-// compressed, but DRACOLoader is still wired into GLTFLoader — harmless if
-// unused, and keeps this working if you ever swap back to a compressed file.
-// ─────────────────────────────────────────────────────────────────────────
 const SUIT_URL = './Advanced_Crew_Escape_Suit.glb';
-
-// Overall size fudge factor, applied on top of the live shoulder-width-based
-// auto-scale (see restShoulderWidth / smoothedScale below). Since scale is
-// now derived from real metric shoulder width instead of a guessed mesh
-// bounding box, start at 1.0 and only nudge it if the suit consistently
-// looks a bit big/small on you.
 const SCALE_BOOST = 1.0;
-
-// The face-tracking placement (maskGroup's base matrix, from MediaPipe's
-// facialTransformationMatrixes) operates in CENTIMETERS — MediaPipe's face
-// geometry module uses a centimeter-scale canonical space, and this also
-// matches the UI ranges here: rDepth ±40 (±40cm push closer/farther) and
-// rHeight ±120 (±120cm reposition range for a full-body suit) both make
-// sense at cm scale, not mm.
-//
-// The rigged suit, however, came out of Blender in proper SI METERS — I
-// measured its bone world positions directly by walking the exported node
-// hierarchy: LeftArm↔RightArm = 0.443m, Hips↔Head = 0.578m, both correct
-// real-world anatomy. Dropped into the centimeter-scale placement space
-// with no conversion, that ~0.44m shoulder width renders at 1/100th the
-// size it should — this constant converts meters to the scene's
-// centimeter units so the two coordinate systems agree.
 const METERS_TO_SCENE_UNITS = 100;
-
-// Same meaning as before: the helmet's authored "front" may not face the
-// camera by default. Toggle with the flip button (top-right) to check, then
-// set this to match so it's right on load.
 const DEFAULT_FLIP = true;
 
-// ─────────────────────────────────────────────────────────────────────────
-// Pose landmark → 3D direction sign correction.
-//
-// MediaPipe's PoseLandmarker worldLandmarks are metric (meters), hip-
-// centered, right-handed. x follows the RAW (unmirrored) camera image's x
-// axis, y increases DOWNWARD (image convention), and z is roughly
-// depth-from-hips with smaller/more-negative values closer to the camera.
-// Three.js here uses a standard Y-up scene with the camera at the origin
-// looking down -Z, matching how the face-tracking matrix already renders
-// correctly. That means Y needs flipping to become Y-up; Z's sign is the
-// one most likely to need adjusting for your camera/setup.
-//
-// If limbs bend the WRONG way, this is where to fix it:
-//   - Left/right swapped or mirrored → flip POSE_X_SIGN
-//   - Arms point up when they should point down (or vice versa) → flip POSE_Y_SIGN
-//   - Elbows/knees bend forward when they should bend back (or vice versa) → flip POSE_Z_SIGN
-// ─────────────────────────────────────────────────────────────────────────
 const POSE_X_SIGN = 1;
 const POSE_Y_SIGN = -1;
 const POSE_Z_SIGN = -1;
 
-// Same idea as the POSE_*_SIGN constants above, but for HandLandmarker's
-// worldLandmarks (hand-centered, metric, one set per detected hand — NOT
-// the same coordinate origin as pose's hip-centered landmarks, but the
-// axis-sign convention across MediaPipe's vision tasks is shared, so the
-// same starting signs are a reasonable default). Only ever used for
-// DIFFERENCES between two landmarks within the same hand (finger bend
-// direction), never as an absolute position, so a mismatched origin
-// doesn't matter — only these signs do. If a finger curls the wrong way,
-// flip the matching axis here.
 const HAND_X_SIGN = 1;
 const HAND_Y_SIGN = -1;
 const HAND_Z_SIGN = -1;
@@ -268,35 +209,16 @@ let usingFallback = false;
 let lastMatrixData = null;
 let lastFaceLandmarks = null;
 let renderer, scene, camera, maskGroup;
-let bones = null;            // { 'Hips': THREE.Bone, 'LeftArm': THREE.Bone, ... } (mixamorig: prefix stripped)
+let bones = null;
 let bonesReady = false;
-let restShoulderWidth = null; // bind-pose LeftArm↔RightArm distance, in the model's own (metric) units
+let restShoulderWidth = null;
 let smoothedScale = null;
 
-// Upper-arm (shoulder→elbow) stretch, so the sleeve's LENGTH tracks your
-// real arm instead of stopping short at the suit's bind-pose proportions.
-// Scoped to ONLY LeftArm/RightArm this time — NOT chained into ForeArm/Hand
-// like the earlier attempt, which is what caused the candy-wrapper
-// ballooning at the wrist: two independently-noisy non-uniform scales
-// compounding on top of each other right at a sharp bend. A single
-// segment, tightly clamped and smoothed, is much safer for this rig
-// (linear blend skinning has no clean way to handle scale across a bent
-// joint — this keeps the bend it has to tolerate to just one boundary,
-// at the elbow, instead of two).
 const BONE_CHAIN_NEXT = { 'LeftArm':'LeftForeArm', 'RightArm':'RightForeArm' };
 const STRETCH_BONES = new Set(Object.keys(BONE_CHAIN_NEXT));
-let boneRestLength = {};   // { boneName: bind-pose world-space meters }
-let smoothedStretch = {};  // { boneName: smoothed scale factor }
+let boneRestLength = {};
+let smoothedStretch = {};
 
-// Sanity bounds for the LIVE shoulder-width measurement, in meters. If the
-// person is too close to the camera (or leaning in so only the face is
-// framed), PoseLandmarker still returns shoulder/hip landmarks — it
-// extrapolates them even when they're not really visible — and the
-// resulting "shoulder width" can be wildly wrong (near-zero, or huge).
-// Feeding that straight into the scale calc is what shrinks the suit down
-// to a speck. These bounds cover a generous range of real adult shoulder
-// widths; anything outside it is treated as unreliable for THIS frame and
-// the previous smoothedScale is kept instead of chasing the bad reading.
 const MIN_LIVE_SHOULDER_M = 0.15;
 const MAX_LIVE_SHOULDER_M = 0.65;
 let manualOffset = {x:0, y:0};
@@ -304,11 +226,10 @@ let suitLoadFailed = false;
 const CHEEK_L = 234, CHEEK_R = 454;
 const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
 
-// Body pose tracking (BlazePose landmark indices).
 let poseLandmarker = null;
 let poseTrackingReady = false;
-let lastPoseLandmarks = null;      // normalized (image-space), for the dot overlay only
-let lastPoseWorldLandmarks = null; // metric (meters), for retargeting
+let lastPoseLandmarks = null;
+let lastPoseWorldLandmarks = null;
 const SHOULDER_L = 11, SHOULDER_R = 12;
 const ELBOW_L = 13, ELBOW_R = 14;
 const WRIST_L = 15, WRIST_R = 16;
@@ -321,24 +242,19 @@ const FOOT_INDEX_L = 31, FOOT_INDEX_R = 32;
 const POSE_MARK_POINTS = [SHOULDER_L, SHOULDER_R, HIP_L, HIP_R, ELBOW_L, ELBOW_R, WRIST_L, WRIST_R, INDEX_L, INDEX_R, KNEE_L, KNEE_R, ANKLE_L, ANKLE_R, FOOT_INDEX_L, FOOT_INDEX_R];
 const POSE_VISIBILITY_MIN = 0.5;
 
-// Each entry: [bone name (mixamorig: prefix stripped), parent landmark idx, child landmark idx].
-// The bone's local +Y axis points at its child in the bind pose (confirmed
-// from the exported GLB's joint translations), so pointBoneTo() below aligns
-// local +Y to the live parent→child direction.
-//
-// LeftHand/RightHand added: the GLB's skin has 33 joints and the glove mesh
-// IS skinned to LeftHand/RightHand — they just weren't being posed, which is
-// why the glove stayed glued to its bind-pose orientation while the forearm
-// rotated away underneath it (the detached blue flap). BlazePose doesn't
-// give finger joints, but it does give an index-finger-knuckle point per
-// hand (19/20), so WRIST→INDEX gives a good overall hand orientation, same
-// pattern as ELBOW→WRIST for the forearm.
-//
-// LeftFoot/RightFoot match the actual rigged skeleton — the GLB's node
-// hierarchy has LeftFoot/RightFoot bones (children of LeftLeg/RightLeg)
-// and BlazePose's world landmarks include a foot-index point (31/32) past
-// the ankle, so the same parent→child pattern used for the other limbs
-// covers them directly.
+// SHOULDER_FOLLOW_FACTOR: how much of the arm's swing the clavicle
+// (LeftShoulder/RightShoulder) absorbs each frame. The rig's suit-fabric
+// mesh is heavily skin-weighted across BOTH the Shoulder and Arm bones
+// (confirmed by inspecting the GLB: ~650 verts on LeftShoulder, ~670 on
+// LeftArm). Previously only Arm/ForeArm/Hand/UpLeg/Leg/Foot were driven,
+// so Shoulder stayed frozen in bind pose while Arm swung freely -- at
+// full extension that's a huge transform gap between two bones sharing
+// the same blended vertices, which tears the mesh into the spiky
+// "candy wrapper" shapes seen at the deltoid/collar seam. Partially
+// rotating the shoulder toward the same direction closes that gap.
+// 0 = old frozen behavior. 1 = shoulder fully tracks (looks robotic).
+const SHOULDER_FOLLOW_FACTOR = 0.35;
+
 const BONE_CHAINS = [
   ['LeftArm', SHOULDER_L, ELBOW_L],
   ['LeftForeArm', ELBOW_L, WRIST_L],
@@ -354,21 +270,6 @@ const BONE_CHAINS = [
   ['RightFoot', ANKLE_R, FOOT_INDEX_R],
 ];
 
-// Hand tracking — up to 2 hands, 21 landmarks each. Drawn as the white dot
-// overlay (image-space landmarks) AND now also retargeted onto the suit's
-// index-finger bones (metric worldLandmarks, one set per hand, keyed by
-// MediaPipe's handedness label so it's matched to the correct glove).
-//
-// The rig only has bones for the index finger (LeftHandIndex1-4 /
-// RightHandIndex1-4) — no thumb/middle/ring/pinky bones exist on this
-// model, so those fingers can't be individually posed here; they stay in
-// whatever shape they were sculpted in. Adding them would mean re-rigging
-// the source mesh, not something this retargeting layer can add on its own.
-//
-// HandLandmarker's 21 points per hand: 0=wrist, 1-4=thumb, 5-8=index
-// (MCP,PIP,DIP,TIP), 9-12=middle, 13-16=ring, 17-20=pinky. Each entry below
-// is [bone name, parent landmark idx, child landmark idx, handedness label],
-// same parent→child direction pattern as BONE_CHAINS.
 const INDEX_MCP = 5, INDEX_PIP = 6, INDEX_DIP = 7, INDEX_TIP = 8;
 const FINGER_CHAINS = [
   ['LeftHandIndex1', INDEX_MCP, INDEX_PIP, 'Left'],
@@ -382,7 +283,7 @@ const FINGER_CHAINS = [
 let handLandmarker = null;
 let handTrackingReady = false;
 let lastHandLandmarks = [];
-let lastHandWorldByLabel = {}; // { 'Left': worldLandmarks[], 'Right': worldLandmarks[] }
+let lastHandWorldByLabel = {};
 const HAND_CONNECTIONS = [
   [0,1],[1,2],[2,3],[3,4],
   [0,5],[5,6],[6,7],[7,8],
@@ -485,9 +386,6 @@ async function loadTracking(){
     return;
   }
 
-  // Body pose drives the limb retargeting below — required for full-body
-  // movement. If it fails to load, the suit still positions itself off the
-  // face matrix, it just won't articulate arms/legs (stays in bind pose).
   try{
     poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
       baseOptions: {
@@ -519,16 +417,6 @@ async function loadTracking(){
   }
 }
 
-// The suit is now a rigged, skinned model exported from Blender (Mixamo rig,
-// mixamorig: bone names). Blender's glTF exporter already bakes the correct
-// Z-up → Y-up conversion into the root node, so — unlike the old unrigged
-// suit — there's no manual axis/bbox detection needed here at all.
-//
-// We re-anchor the loaded hierarchy so the Head bone's BIND-POSE position
-// sits at maskGroup's local origin (0,0,0). That lets the rest of the code
-// keep using the face-tracking matrix as maskGroup's transform exactly like
-// before: the head lands where the face is, and the body hangs below it
-// according to the suit's own authored proportions.
 function loadSuit(){
   return new Promise((resolve)=>{
     const dracoLoader = new DRACOLoader();
@@ -558,16 +446,12 @@ function loadSuit(){
         return;
       }
 
-      // Re-anchor so Head's bind-pose position becomes local (0,0,0).
       root.updateMatrixWorld(true);
       const headPos = new THREE.Vector3();
       bones['Head'].getWorldPosition(headPos);
       root.position.sub(headPos);
       root.updateMatrixWorld(true);
 
-      // Bind-pose shoulder width (LeftArm↔RightArm joint distance), used as
-      // the reference for live metric scaling below — this is now a real
-      // joint-to-joint measurement rather than a guessed mesh bounding box.
       const lp = new THREE.Vector3(), rp = new THREE.Vector3();
       bones['LeftArm'].getWorldPosition(lp);
       bones['RightArm'].getWorldPosition(rp);
@@ -609,17 +493,10 @@ function enableDragFallback(){
   window.addEventListener('pointerup', ()=> dragging = false);
 }
 
-// Converts a MediaPipe world landmark (metric, hip-centered) into a
-// direction-safe THREE.Vector3 using the sign-correction constants above.
-// Only ever used for DIFFERENCES between two landmarks (bone directions) or
-// DISTANCES (shoulder width) — never as an absolute position — so the
-// exact origin/translation convention doesn't matter, only the axis signs.
 function mpVec(lm){
   return new THREE.Vector3(lm.x*POSE_X_SIGN, lm.y*POSE_Y_SIGN, lm.z*POSE_Z_SIGN);
 }
 
-// Same conversion as mpVec, but for HandLandmarker's per-hand worldLandmarks
-// and their own sign constants (see HAND_*_SIGN above).
 function mpVecHand(lm){
   return new THREE.Vector3(lm.x*HAND_X_SIGN, lm.y*HAND_Y_SIGN, lm.z*HAND_Z_SIGN);
 }
@@ -627,12 +504,6 @@ function mpVecHand(lm){
 const _tmpQ = new THREE.Quaternion();
 const RESTY = new THREE.Vector3(0,1,0);
 
-// Rotates `bone` (in its own LOCAL space) so its bind-pose +Y axis points
-// along `targetWorldDir` (a world-space-aligned direction — see mpVec).
-// Requires bone.parent's matrixWorld to already reflect any rotation set
-// earlier this frame (we call updateWorldMatrix immediately after setting
-// each bone, so chains resolve top-down: Arm before ForeArm before Hand,
-// UpLeg before Leg before Foot, etc).
 function pointBoneTo(bone, targetWorldDir){
   bone.parent.updateWorldMatrix(true, false);
   bone.parent.getWorldQuaternion(_tmpQ);
@@ -644,13 +515,37 @@ function pointBoneTo(bone, targetWorldDir){
   bone.updateWorldMatrix(true, false);
 }
 
-// 1.0 = arm fully straight (shoulder→elbow and elbow→wrist point the same
-// way), fading toward 0.0 the more the elbow bends. Used to fade the
-// stretch amount OUT as the arm bends — a straight arm has no competing
-// bend for the skin weights to fight over, so stretch reads cleanly there;
-// a bent elbow is exactly where two different scale factors meeting at a
-// joint start to look distorted, so we back off automatically instead of
-// relying on a fixed clamp to cover every bend angle.
+// Partially rotates a clavicle bone (LeftShoulder/RightShoulder) toward the
+// same shoulder->elbow direction driving the arm below it, blended with its
+// own bind-pose direction by SHOULDER_FOLLOW_FACTOR. Must run BEFORE the
+// BONE_CHAINS loop poses 'LeftArm'/'RightArm': pointBoneTo() recomputes each
+// bone's local rotation from its parent's CURRENT world matrix, so once the
+// shoulder is partially rotated here, the arm's own pointBoneTo call
+// automatically needs a smaller local rotation to reach the same live
+// elbow direction -- the two bones share the swing instead of the shoulder
+// staying frozen while the arm does all of it (which is what was tearing
+// the skin-weight blend at the deltoid/collar seam).
+function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks){
+  const bone = bones[boneName];
+  if(!bone) return;
+  const p = worldLandmarks[shoulderIdx], c = worldLandmarks[elbowIdx];
+  if(!p || !c) return;
+  if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN) ||
+     (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN)) return;
+  const liveDir = mpVec(c).sub(mpVec(p));
+  if(liveDir.lengthSq() < 1e-8) return;
+  liveDir.normalize();
+
+  // Bind-pose +Y direction of this bone in world space, read BEFORE we
+  // touch it this frame (still whatever was loaded from the GLB).
+  const restQuat = new THREE.Quaternion();
+  bone.getWorldQuaternion(restQuat);
+  const restDir = new THREE.Vector3(0,1,0).applyQuaternion(restQuat).normalize();
+
+  const blended = restDir.lerp(liveDir, SHOULDER_FOLLOW_FACTOR).normalize();
+  pointBoneTo(bone, blended);
+}
+
 function armStraightness(worldLandmarks, shoulderIdx, elbowIdx, wristIdx){
   const s = worldLandmarks[shoulderIdx], e = worldLandmarks[elbowIdx], w = worldLandmarks[wristIdx];
   if(!s || !e || !w) return 1;
@@ -661,13 +556,6 @@ function armStraightness(worldLandmarks, shoulderIdx, elbowIdx, wristIdx){
   return THREE.MathUtils.clamp(upper.dot(lower), 0, 1);
 }
 
-// Stretches `bone` along its local +Y (the axis pointBoneTo just aimed
-// toward the elbow) so this segment's rendered length tracks the live
-// shoulder→elbow distance, on top of whatever uniform body scale is
-// already applied. bendFactor (see armStraightness) fades the EXTRA
-// stretch toward 1.0 (i.e. no extra stretch, just bind-pose length) as the
-// elbow bends, so distortion only has room to show up when the arm is
-// straight enough that it wouldn't be visible anyway.
 function applyBoneStretch(bone, boneName, liveLen, bendFactor){
   const restLen = boneRestLength[boneName];
   if(!restLen) return;
@@ -681,6 +569,10 @@ function applyBoneStretch(bone, boneName, liveLen, bendFactor){
 }
 
 function applyPoseToSkeleton(worldLandmarks){
+  // Clavicles first -- see poseShoulder() comment for why order matters.
+  poseShoulder('LeftShoulder', SHOULDER_L, ELBOW_L, worldLandmarks);
+  poseShoulder('RightShoulder', SHOULDER_R, ELBOW_R, worldLandmarks);
+
   const leftBend = armStraightness(worldLandmarks, SHOULDER_L, ELBOW_L, WRIST_L);
   const rightBend = armStraightness(worldLandmarks, SHOULDER_R, ELBOW_R, WRIST_R);
   for(const [boneName, pIdx, cIdx] of BONE_CHAINS){
@@ -701,9 +593,6 @@ function applyPoseToSkeleton(worldLandmarks){
   }
 }
 
-// Curls the index-finger bones per hand using HandLandmarker's landmarks.
-// Only the index finger has bones on this rig (see FINGER_CHAINS comment) —
-// thumb/middle/ring/pinky have no bone to move and stay as sculpted.
 function applyFingersToSkeleton(handWorldByLabel){
   for(const [boneName, pIdx, cIdx, label] of FINGER_CHAINS){
     const bone = bones[boneName];
@@ -734,9 +623,6 @@ function updatePlacementAndPose(){
     );
   }
 
-  // Live scale: compare real metric shoulder width (from PoseLandmarker
-  // world landmarks) against the suit's own bind-pose shoulder width. No
-  // multi-frame calibration lock needed — both sides are already in meters.
   let haveLiveScale = false;
   if(lastPoseWorldLandmarks && restShoulderWidth){
     const l = lastPoseWorldLandmarks[SHOULDER_L], r = lastPoseWorldLandmarks[SHOULDER_R];
@@ -747,10 +633,6 @@ function updatePlacementAndPose(){
         smoothedScale = (smoothedScale === null) ? targetScale : smoothedScale + (targetScale - smoothedScale) * 0.15;
         haveLiveScale = true;
       }
-      // else: shoulders were "visible" per the confidence score but the
-      // measured width is implausible (typically because the person is too
-      // close/leaning in and the model is extrapolating past the frame
-      // edge) — skip this frame's reading rather than let it corrupt scale.
     }
   }
   statusDot.className = haveLiveScale ? 'status-dot locked' : 'status-dot fitting';
@@ -904,9 +786,6 @@ snapBtn.addEventListener('click', ()=>{
   };
 });
 
-// Repurposed for the new system: just resets the scale smoothing so it
-// snaps to the current live shoulder width quickly, useful if tracking
-// glitched and the size drifted.
 recalBtn.addEventListener('click', ()=>{
   smoothedScale = null;
   smoothedStretch = {};
@@ -922,10 +801,6 @@ dotsBtn.addEventListener('click', ()=>{
   dotsBtn.classList.toggle('active', showDots);
 });
 
-// Toggles whether pose data drives the limbs at all. Off = suit stays in
-// its authored bind pose (arms/legs static) but still follows your head via
-// the face-tracking matrix, same as the old rigid behavior — useful as a
-// fallback if pose tracking is unavailable or misbehaving.
 poseRetargetBtn.addEventListener('click', ()=>{
   poseRetargetEnabled = !poseRetargetEnabled;
   poseRetargetBtn.classList.toggle('active', poseRetargetEnabled);
