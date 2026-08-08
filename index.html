@@ -260,23 +260,6 @@ let bonesReady = false;
 let restShoulderWidth = null; // bind-pose LeftArm↔RightArm distance, in the model's own (metric) units
 let smoothedScale = null;
 
-// Per-bone bind-pose segment lengths (world-space meters, captured once at
-// load — see loadSuit), and their smoothed live stretch factors. Rotation
-// alone (pointBoneTo) only aims a bone; it can't make a short suit sleeve
-// reach a longer real arm. STRETCH_BONES lists which bones additionally get
-// their local Y-scale adjusted each frame so the segment's length tracks
-// the live landmark distance, not just its direction — this is what closes
-// the gap between the end of the sleeve and the wrist/glove.
-const BONE_CHAIN_NEXT = {
-  'LeftArm':'LeftForeArm', 'LeftForeArm':'LeftHand',
-  'RightArm':'RightForeArm', 'RightForeArm':'RightHand',
-  'LeftUpLeg':'LeftLeg', 'LeftLeg':'LeftFoot',
-  'RightUpLeg':'RightLeg', 'RightLeg':'RightFoot',
-};
-const STRETCH_BONES = new Set(Object.keys(BONE_CHAIN_NEXT));
-let boneRestLength = {};   // { boneName: meters }
-let smoothedStretch = {};  // { boneName: smoothed scale factor }
-
 // Sanity bounds for the LIVE shoulder-width measurement, in meters. If the
 // person is too close to the camera (or leaning in so only the face is
 // framed), PoseLandmarker still returns shoulder/hip landmarks — it
@@ -538,19 +521,6 @@ function loadSuit(){
       bones['RightArm'].getWorldPosition(rp);
       restShoulderWidth = lp.distanceTo(rp) || 0.3;
 
-      // Bind-pose length of each stretchable segment (world-space meters,
-      // same basis as restShoulderWidth above), used as the baseline that
-      // live landmark distances get compared against each frame.
-      boneRestLength = {};
-      for(const [name, childName] of Object.entries(BONE_CHAIN_NEXT)){
-        const b = bones[name], cb = bones[childName];
-        if(!b || !cb) continue;
-        const bp = new THREE.Vector3(), cp = new THREE.Vector3();
-        b.getWorldPosition(bp);
-        cb.getWorldPosition(cp);
-        boneRestLength[name] = bp.distanceTo(cp) || 0.01;
-      }
-
       maskGroup.add(root);
       bonesReady = true;
       dracoLoader.dispose();
@@ -606,26 +576,6 @@ function pointBoneTo(bone, targetWorldDir){
   bone.updateWorldMatrix(true, false);
 }
 
-// Stretches `bone` along its local +Y (the axis pointBoneTo just aimed at
-// the child landmark) so the segment's rendered length matches the live
-// landmark distance, on top of whatever uniform body scale is already in
-// effect. Both liveLen and boneRestLength are in real meters, so dividing
-// them gives the *total* scale the segment needs; dividing that by the
-// already-applied global smoothedScale leaves just the EXTRA per-bone
-// stretch this bone needs on top of the uniform scaling every bone gets
-// for free via maskGroup's transform. Clamped and smoothed so a noisy
-// landmark for one frame doesn't snap a limb to a weird length.
-function applyBoneStretch(bone, boneName, liveLen){
-  const restLen = boneRestLength[boneName];
-  if(!restLen) return;
-  const globalScale = smoothedScale || 1;
-  const targetStretch = THREE.MathUtils.clamp((liveLen / restLen) / globalScale, 0.6, 1.8);
-  const prev = smoothedStretch[boneName];
-  const next = (prev === undefined) ? targetStretch : prev + (targetStretch - prev) * 0.2;
-  smoothedStretch[boneName] = next;
-  bone.scale.set(1, next, 1);
-}
-
 function applyPoseToSkeleton(worldLandmarks){
   for(const [boneName, pIdx, cIdx] of BONE_CHAINS){
     const bone = bones[boneName];
@@ -635,10 +585,8 @@ function applyPoseToSkeleton(worldLandmarks){
     if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN) ||
        (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN)) continue;
     const dir = mpVec(c).sub(mpVec(p));
-    const liveLen = dir.length();
-    if(liveLen < 1e-4) continue;
-    pointBoneTo(bone, dir.clone().normalize());
-    if(STRETCH_BONES.has(boneName)) applyBoneStretch(bone, boneName, liveLen);
+    if(dir.lengthSq() < 1e-8) continue;
+    pointBoneTo(bone, dir.normalize());
   }
 }
 
@@ -823,7 +771,6 @@ snapBtn.addEventListener('click', ()=>{
 // glitched and the size drifted.
 recalBtn.addEventListener('click', ()=>{
   smoothedScale = null;
-  smoothedStretch = {};
 });
 
 flipBtn.addEventListener('click', ()=>{
