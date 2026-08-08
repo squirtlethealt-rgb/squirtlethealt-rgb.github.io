@@ -218,6 +218,7 @@ const BONE_CHAIN_NEXT = { 'LeftArm':'LeftForeArm', 'RightArm':'RightForeArm' };
 const STRETCH_BONES = new Set(Object.keys(BONE_CHAIN_NEXT));
 let boneRestLength = {};
 let smoothedStretch = {};
+let shoulderBindLocalQuat = {}; // true bind-pose LOCAL rotation, cached once at load
 
 const MIN_LIVE_SHOULDER_M = 0.15;
 const MAX_LIVE_SHOULDER_M = 0.65;
@@ -477,6 +478,19 @@ function loadSuit(){
         boneRestLength[name] = bp.distanceTo(cp) || 0.01;
       }
 
+      // Cache the TRUE bind-pose LOCAL rotation for the shoulder bones,
+      // right now before poseShoulder() ever touches them. poseShoulder()
+      // used to read the bone's current quaternion each frame and treat it
+      // as "rest" -- but after frame 1 that's already last frame's rotated
+      // result, not bind pose, so "rest" silently drifted every frame
+      // instead of staying fixed. This is what caused tearing even with
+      // arms relaxed, not just at extreme reach.
+      shoulderBindLocalQuat = {};
+      for(const name of ['LeftShoulder','RightShoulder']){
+        const b = bones[name];
+        if(b) shoulderBindLocalQuat[name] = b.quaternion.clone();
+      }
+
       maskGroup.add(root);
       bonesReady = true;
       dracoLoader.dispose();
@@ -548,8 +562,17 @@ function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks){
 
   // Bind-pose +Y direction of this bone in world space, read BEFORE we
   // touch it this frame (still whatever was loaded from the GLB).
-  const restQuat = new THREE.Quaternion();
-  bone.getWorldQuaternion(restQuat);
+  // TRUE rest direction: cached bind-pose LOCAL rotation combined with the
+  // parent's CURRENT world rotation (Spine2 is never touched, so this is
+  // stable), NOT the bone's own live quaternion -- reading the bone's live
+  // quaternion here would just be measuring against wherever it ended up
+  // last frame, which drifts.
+  const bindLocal = shoulderBindLocalQuat[boneName];
+  if(!bindLocal) return;
+  bone.parent.updateWorldMatrix(true, false);
+  const parentWorldQuat = new THREE.Quaternion();
+  bone.parent.getWorldQuaternion(parentWorldQuat);
+  const restQuat = parentWorldQuat.clone().multiply(bindLocal);
   const restDir = new THREE.Vector3(0,1,0).applyQuaternion(restQuat).normalize();
 
   const angle = restDir.angleTo(liveDir);
