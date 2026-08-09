@@ -16,7 +16,9 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
   html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none;}
   .stage{position:fixed;inset:0;background:#000;touch-action:none;}
-  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#000;}
+  /* Camera feed is kept alive for tracking but never shown -- the visible
+     background is now the fully virtual scene rendered onto glCanvas. */
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;pointer-events:none;background:#000;}
   canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);pointer-events:none;}
   canvas.dots{z-index:3;}
 
@@ -146,6 +148,9 @@
     <button class="icon-btn active" id="poseRetargetBtn" aria-label="full body tracking">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v6l-3 7"/><path d="M12 13l3 7"/><path d="M8 10l4-1 4 1"/></svg>
     </button>
+    <button class="icon-btn active" id="envBtn" aria-label="virtual environment">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    </button>
   </div>
 </div>
 
@@ -194,6 +199,7 @@ const recalBtn = document.getElementById('recalBtn');
 const sheet = document.getElementById('sheet');
 const sheetBackdrop = document.getElementById('sheetBackdrop');
 const poseRetargetBtn = document.getElementById('poseRetargetBtn');
+const envBtn = document.getElementById('envBtn');
 const rFine = document.getElementById('rFine');
 const rDepth = document.getElementById('rDepth');
 const rHeight = document.getElementById('rHeight');
@@ -202,6 +208,7 @@ const rTilt = document.getElementById('rTilt');
 let showDots = true;
 let poseRetargetEnabled = true;
 let flip180 = DEFAULT_FLIP;
+let envEnabled = true;
 
 let faceLandmarker = null;
 let trackingReady = false;
@@ -209,6 +216,16 @@ let usingFallback = false;
 let lastMatrixData = null;
 let lastFaceLandmarks = null;
 let renderer, scene, camera, maskGroup;
+let envGroup = null;
+let envPanels = [];
+// Smoothed environment parallax rotation, driven by head yaw/pitch --
+// see updatePlacementAndPose(). Kept separate from envGroup.rotation
+// itself so we can lerp toward a target each frame instead of snapping.
+let smoothedEnvYaw = 0;
+let smoothedEnvPitch = 0;
+const PARALLAX_YAW = 0.32;   // how much env rotation per radian of head yaw
+const PARALLAX_PITCH = 0.22; // how much env rotation per radian of head pitch
+const PARALLAX_SMOOTH = 0.08; // lerp factor per frame -- lower = dreamier/slower
 let bones = null;
 let bonesReady = false;
 let restShoulderWidth = null;
@@ -364,7 +381,7 @@ function initThree(){
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.75));
   renderer.setSize(video.videoWidth, video.videoHeight, false);
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(63, video.videoWidth/video.videoHeight, 1, 5000);
+  camera = new THREE.PerspectiveCamera(63, video.videoWidth/video.videoHeight, 1, 6000);
   camera.position.set(0,0,0);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a2a, 1.2));
@@ -378,6 +395,98 @@ function initThree(){
   maskGroup = new THREE.Group();
   maskGroup.matrixAutoUpdate = false;
   scene.add(maskGroup);
+
+  buildSpaceEnvironment();
+}
+
+// Builds a fully virtual "inside a spacecraft, looking out at Earth"
+// backdrop directly in the Three.js scene, so nothing from the real
+// camera feed is ever shown -- only used headlessly for tracking. Kept
+// as plain geometry/materials (no external textures) so it loads
+// instantly and has no licensing/asset dependencies.
+function buildSpaceEnvironment(){
+  envGroup = new THREE.Group();
+  envPanels = [];
+
+  scene.background = new THREE.Color(0x02030a);
+  scene.fog = new THREE.FogExp2(0x02030a, 0.00035);
+
+  // Starfield -- scattered points on a large shell around the scene.
+  const starCount = 2200;
+  const starPos = new Float32Array(starCount * 3);
+  for(let i=0;i<starCount;i++){
+    const r = 1600 + Math.random()*1800;
+    const theta = Math.random()*Math.PI*2;
+    const phi = Math.acos((Math.random()*2)-1);
+    starPos[i*3]   = r*Math.sin(phi)*Math.cos(theta);
+    starPos[i*3+1] = r*Math.sin(phi)*Math.sin(theta);
+    starPos[i*3+2] = r*Math.cos(phi) - 600;
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  const starMat = new THREE.PointsMaterial({ color:0xffffff, size:2.4, sizeAttenuation:true, transparent:true, opacity:0.9 });
+  envGroup.add(new THREE.Points(starGeo, starMat));
+
+  // Earth, seen through the "window" ahead and to one side.
+  const earthMat = new THREE.MeshStandardMaterial({ color:0x1c5fae, emissive:0x0a2a4d, emissiveIntensity:0.65, roughness:0.75, metalness:0.1 });
+  const earth = new THREE.Mesh(new THREE.SphereGeometry(280, 48, 48), earthMat);
+  earth.position.set(480, -160, -2000);
+  envGroup.add(earth);
+  const cloudMat = new THREE.MeshStandardMaterial({ color:0xffffff, transparent:true, opacity:0.14, roughness:1 });
+  const clouds = new THREE.Mesh(new THREE.SphereGeometry(286, 32, 32), cloudMat);
+  clouds.position.copy(earth.position);
+  envGroup.add(clouds);
+  const earthGlow = new THREE.PointLight(0x4d8fdd, 0.8, 3000);
+  earthGlow.position.copy(earth.position);
+  envGroup.add(earthGlow);
+
+  // Spacecraft hull -- an open cylinder surrounding the camera, seen
+  // from the inside (BackSide material), so it reads as a module wall
+  // rather than a solid object blocking the view.
+  const hullMat = new THREE.MeshStandardMaterial({ color:0x6b7686, metalness:0.55, roughness:0.5, side:THREE.BackSide });
+  const hull = new THREE.Mesh(new THREE.CylinderGeometry(1000, 1000, 3000, 40, 1, true), hullMat);
+  hull.rotation.z = Math.PI/2;
+  hull.position.set(0, 0, -400);
+  envGroup.add(hull);
+
+  // Accent ribs along the hull, alternating saffron/green -- a nod to
+  // the tricolour without being literal, and they double as depth cues.
+  for(let i=-4;i<=4;i++){
+    const isSaffron = i % 2 === 0;
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: isSaffron ? 0xff9933 : 0x138808,
+      transparent: true, opacity: 0.45
+    });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(996, 3.5, 8, 48), ringMat);
+    ring.rotation.x = Math.PI/2;
+    ring.position.z = -400 + i*420;
+    envGroup.add(ring);
+    envPanels.push({ mesh: ring, baseOpacity: 0.45, phase: i*0.7 });
+  }
+
+  // A couple of low console-style light strips near the bottom edge of
+  // frame, for a cockpit feel. Purely decorative emissive boxes.
+  const consoleColors = [0xff9933, 0xffffff, 0x138808];
+  for(let i=0;i<consoleColors.length;i++){
+    const mat = new THREE.MeshBasicMaterial({ color: consoleColors[i], transparent:true, opacity:0.55 });
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(60, 4, 4), mat);
+    strip.position.set(-90 + i*90, -230, -260);
+    envGroup.add(strip);
+    envPanels.push({ mesh: strip, baseOpacity: 0.55, phase: i*1.3 });
+  }
+
+  scene.add(envGroup);
+}
+
+function updateEnvironment(timeSec){
+  if(!envGroup) return;
+  envGroup.visible = envEnabled;
+  if(!envEnabled) return;
+  // Gentle blink/pulse on the accent panels so it doesn't feel static.
+  for(const p of envPanels){
+    const pulse = 0.75 + 0.25*Math.sin(timeSec*1.4 + p.phase);
+    p.mesh.material.opacity = p.baseOpacity * pulse;
+  }
 }
 
 async function loadTracking(){
@@ -627,30 +736,6 @@ function computeSwingTwist(bindLocalQuat){
 // elbow direction -- the two bones share the swing instead of the shoulder
 // staying frozen while the arm does all of it (which is what was tearing
 // the skin-weight blend at the deltoid/collar seam).
-// IMPORTANT: this replaced an earlier version that compared liveDir
-// against the SHOULDER bone's own bind-pose direction. That was a real
-// bug, caught by seam-test.mjs: the shoulder bone's own local axis points
-// along the tiny clavicle segment (roughly sideways, into the deltoid),
-// which is a totally different direction than shoulder->elbow. Comparing
-// them produced a huge bogus angle (~130 degrees) EVEN WHEN THE ARM HADN'T
-// MOVED AT ALL, which is why tearing kept showing up on a resting arm.
-//
-// Correct approach, verified with seam-test.mjs down to 0.0 degrees of
-// error at rest: measure how far the ARM has swung from ITS OWN rest
-// direction (armRestWorldDir, cached at load), then apply a
-// SHOULDER_FOLLOW_FACTOR-sized fraction of that SAME rotation to the
-// shoulder, composed on top of its own bind pose -- not by re-aiming the
-// shoulder's local axis at an unrelated target.
-//
-// NOTE: this math assumes the ARM/SHOULDER PARENT CHAIN (Hips/Spine) is
-// sitting in a stable, camera-upright orientation, matching the frame the
-// PoseLandmarker world landmarks are expressed in. That's now guaranteed
-// by updatePlacementAndPose() only feeding YAW into the root and routing
-// head pitch/roll into the Head bone alone -- previously the whole root
-// (and therefore this bone's parent chain) rotated with head pitch/roll
-// too, which silently invalidated this "rest direction" comparison every
-// time you looked down and is what caused the shoulder-seam tearing in
-// practice, not just in the extreme-reach case this constant was tuned for.
 function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks, armRestWorldDir){
   const bone = bones[boneName];
   if(!bone || !armRestWorldDir) return;
@@ -669,9 +754,6 @@ function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks, armRestWo
   const swingAngle = 2 * Math.acos(THREE.MathUtils.clamp(Math.abs(swingQuat.w), -1, 1));
   if(swingAngle < 1e-4) return;
 
-  // Same proportional follow as before, but never let the shoulder's own
-  // rotation exceed MAX_SHOULDER_SWING_RAD -- this is what keeps the
-  // Spine2|Shoulder seam bounded even when the arm goes fully overhead.
   const desiredAngle = Math.min(swingAngle * SHOULDER_FOLLOW_FACTOR, MAX_SHOULDER_SWING_RAD);
   const t = desiredAngle / swingAngle;
   const identity = new THREE.Quaternion();
@@ -754,8 +836,6 @@ function updatePlacementAndPose(){
   const tilt = THREE.MathUtils.degToRad(parseFloat(rTilt.value));
 
   const base = new THREE.Matrix4();
-  // Pitch/roll left over after the root only takes yaw -- applied to the
-  // Head bone alone, further down, once bones are known to be ready.
   let headResidualQuat = null;
 
   if(trackingReady && lastMatrixData){
@@ -765,23 +845,23 @@ function updatePlacementAndPose(){
     const faceScale = new THREE.Vector3();
     faceMat.decompose(facePos, faceQuat, faceScale);
 
-    // Only let the ROOT (the whole suit) turn left/right with the head
-    // (yaw). Nodding up/down or tilting the head sideways (pitch/roll)
-    // used to be baked into this same root rotation, which meant the
-    // ENTIRE torso/arm/leg chain rotated with a head nod -- looking down
-    // bent the whole body forward at the hips instead of just nodding the
-    // helmet. Worse, PoseLandmarker's world landmarks (which drive the
-    // arm bones below) are expressed in an upright, camera-relative
-    // frame that knows nothing about that extra pitch/roll -- so
-    // pointBoneTo() had to fight it every frame to reach the same live
-    // elbow direction, which is what tore open the shoulder/deltoid seam.
-    // Splitting yaw (root) from pitch/roll (Head bone only, see below)
-    // fixes both symptoms at once.
     const faceEuler = new THREE.Euler().setFromQuaternion(faceQuat, 'YXZ');
     const yawOnlyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, faceEuler.y, 0, 'YXZ'));
     headResidualQuat = yawOnlyQuat.clone().invert().multiply(faceQuat);
 
     base.compose(facePos, yawOnlyQuat, new THREE.Vector3(1,1,1));
+
+    // Parallax: nudge the environment opposite the head's yaw/pitch, like
+    // looking around inside a cabin rather than a flat backdrop tracking
+    // the suit. Negative sign is intentional -- turning your head right
+    // should reveal more of what's to your left, not follow you.
+    if(envGroup){
+      const targetYaw = -faceEuler.y * PARALLAX_YAW;
+      const targetPitch = -faceEuler.x * PARALLAX_PITCH;
+      smoothedEnvYaw += (targetYaw - smoothedEnvYaw) * PARALLAX_SMOOTH;
+      smoothedEnvPitch += (targetPitch - smoothedEnvPitch) * PARALLAX_SMOOTH;
+      envGroup.rotation.set(smoothedEnvPitch, smoothedEnvYaw, 0);
+    }
   } else {
     base.compose(
       new THREE.Vector3(manualOffset.x, manualOffset.y, -300),
@@ -817,10 +897,6 @@ function updatePlacementAndPose(){
   maskGroup.matrixWorldNeedsUpdate = true;
   maskGroup.updateMatrixWorld(true);
 
-  // Apply the head's own pitch/roll (nodding, tilting) locally, on top of
-  // its bind pose, now that the root/parent chain is stable. This runs
-  // whenever we have fresh face tracking, independent of poseRetargetEnabled,
-  // since it's driven by the face model, not the body pose model.
   if(bonesReady && bones['Head'] && headBindLocalQuat && headResidualQuat){
     bones['Head'].quaternion.copy(headResidualQuat.clone().multiply(headBindLocalQuat));
     bones['Head'].updateWorldMatrix(true, false);
@@ -868,6 +944,7 @@ async function loop(){
   }
 
   drawTrackingDots();
+  updateEnvironment(now / 1000);
 
   if(maskGroup && bonesReady){
     updatePlacementAndPose();
@@ -941,14 +1018,19 @@ function drawTrackingDots(){
   }
 }
 
+// Capture now grabs the rendered glCanvas only -- since the background is
+// fully virtual (rendered by Three.js, not the camera), there's no need
+// to composite the real video frame underneath anymore.
 snapBtn.addEventListener('click', ()=>{
   const shot = document.createElement('canvas');
-  shot.width = video.videoWidth;
-  shot.height = video.videoHeight;
+  shot.width = video.videoWidth || glCanvas.width;
+  shot.height = video.videoHeight || glCanvas.height;
   const sctx = shot.getContext('2d');
+  // Keep the same mirrored orientation the user sees on screen (glCanvas
+  // is displayed with CSS scaleX(-1), but its raw pixel buffer is not
+  // mirrored, so flip it the same way here).
   sctx.translate(shot.width, 0);
-  sctx.scale(-1,1);
-  sctx.drawImage(video, 0, 0, shot.width, shot.height);
+  sctx.scale(-1, 1);
   sctx.drawImage(glCanvas, 0, 0, shot.width, shot.height);
   sctx.setTransform(1,0,0,1,0,0);
   const dataUrl = shot.toDataURL('image/png');
@@ -980,6 +1062,11 @@ dotsBtn.addEventListener('click', ()=>{
 poseRetargetBtn.addEventListener('click', ()=>{
   poseRetargetEnabled = !poseRetargetEnabled;
   poseRetargetBtn.classList.toggle('active', poseRetargetEnabled);
+});
+
+envBtn.addEventListener('click', ()=>{
+  envEnabled = !envEnabled;
+  envBtn.classList.toggle('active', envEnabled);
 });
 
 function openSheet(){ sheet.classList.add('open'); sheetBackdrop.classList.add('open'); }
