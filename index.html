@@ -254,15 +254,20 @@ const POSE_VISIBILITY_MIN = 0.5;
 // "candy wrapper" shapes seen at the deltoid/collar seam. Partially
 // rotating the shoulder toward the same direction closes that gap.
 // 0 = old frozen behavior. 1 = shoulder fully tracks (looks robotic).
-const SHOULDER_FOLLOW_FACTOR = 0.35;
+// Tuned for normal poses -- arms at sides through shoulder height (0-90
+// degrees of raise), which is what people will actually be doing most of
+// the time. At 0.35 that range was already fine (cap below never engages
+// until ~114 degrees anyway), so this bump to 0.4 gives the shoulder a bit
+// more natural clavicle motion right in that everyday range, prioritizing
+// it over full overhead reach, which is accepted to still show some
+// tearing -- there's no single value that fixes both without a proper
+// corrective bone in the rig.
+const SHOULDER_FOLLOW_FACTOR = 0.4;
 // Hard ceiling on how far the clavicle itself is allowed to swing, in
-// degrees, no matter how extreme the tracked arm direction is. Without
-// this, a fixed 35% follow of a fully-overhead arm still rotates the
-// shoulder a lot -- and since its own parent (Spine2/chest) is deliberately
-// never touched (Spine2 -> Neck -> Head is what keeps the helmet locked to
-// your actual head via face tracking), that swing just moves the tearing
-// up one seam, from Shoulder|Arm to Spine2|Shoulder. Capping the angle
-// keeps that seam bounded through the normal range of motion.
+// degrees, no matter how extreme the tracked arm direction is. Only
+// engages well past shoulder height (>~112 degrees at this factor), so it
+// has no effect on the normal-pose range this is tuned for -- it just
+// keeps the overhead case from swinging the chest seam open completely.
 const MAX_SHOULDER_SWING_DEG = 40;
 const MAX_SHOULDER_SWING_RAD = THREE.MathUtils.degToRad(MAX_SHOULDER_SWING_DEG);
 
@@ -439,7 +444,28 @@ function loadSuit(){
     loader.setCrossOrigin('anonymous');
     loader.load(SUIT_URL, (gltf)=>{
       const root = gltf.scene;
-      root.traverse(o=>{ if(o.isMesh){ o.frustumCulled = false; } });
+      root.traverse(o=>{
+        if(o.isMesh){
+          o.frustumCulled = false;
+          // The suit's interior lining ("ACES_INTERIOR...") is authored
+          // double-sided in the source file -- normal for an interior
+          // surface, since it's only meant to be seen if you look inside a
+          // sleeve/collar. But any residual sub-pixel gap at a skin-blend
+          // seam (see poseShoulder()) lets the camera see straight through
+          // to it, and because it renders both faces that reads as a
+          // glaring flash of navy instead of just... not being there.
+          // Forcing FrontSide here doesn't touch the source file or the
+          // skinning at all -- it just stops that one interior surface
+          // from drawing its backfaces, so a stray gap shows background
+          // through it instead of bright blue.
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for(const mat of mats){
+            if(mat && mat.name && mat.name.toLowerCase().includes('interior')){
+              mat.side = THREE.FrontSide;
+            }
+          }
+        }
+      });
 
       bones = {};
       root.traverse(o=>{
