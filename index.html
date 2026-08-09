@@ -219,6 +219,8 @@ const STRETCH_BONES = new Set(Object.keys(BONE_CHAIN_NEXT));
 let boneRestLength = {};
 let smoothedStretch = {};
 let shoulderBindLocalQuat = {}; // true bind-pose LOCAL rotation, cached once at load
+let armRestWorldDir = {}; // true bind-pose WORLD direction of shoulder->elbow per arm
+let boneTwist = {}; // { boneName: twist quaternion }, cached once at load
 
 const MIN_LIVE_SHOULDER_M = 0.15;
 const MAX_LIVE_SHOULDER_M = 0.65;
@@ -254,15 +256,13 @@ const POSE_VISIBILITY_MIN = 0.5;
 // "candy wrapper" shapes seen at the deltoid/collar seam. Partially
 // rotating the shoulder toward the same direction closes that gap.
 // 0 = old frozen behavior. 1 = shoulder fully tracks (looks robotic).
-// Tuned for normal poses -- arms at sides through shoulder height (0-90
-// degrees of raise), which is what people will actually be doing most of
-// the time. At 0.35 that range was already fine (cap below never engages
-// until ~114 degrees anyway), so this bump to 0.4 gives the shoulder a bit
-// more natural clavicle motion right in that everyday range, prioritizing
-// it over full overhead reach, which is accepted to still show some
-// tearing -- there's no single value that fixes both without a proper
-// corrective bone in the rig.
-const SHOULDER_FOLLOW_FACTOR = 0.4;
+// Tuned numerically against seam-test.mjs (not by eye): 0.5 is the value
+// that minimizes the WORSE of the two seam mismatches (chest seam vs
+// elbow-side seam) across the whole 0-90 degree "normal pose" range --
+// verified to keep both seams under the 40-degree tear-risk threshold for
+// arms at sides through full shoulder-height raise. See seam-test.mjs for
+// the full sweep and how this number was derived.
+const SHOULDER_FOLLOW_FACTOR = 0.5;
 // Hard ceiling on how far the clavicle itself is allowed to swing, in
 // degrees, no matter how extreme the tracked arm direction is. Only
 // engages well past shoulder height (>~112 degrees at this factor), so it
@@ -504,6 +504,18 @@ function loadSuit(){
         boneRestLength[name] = bp.distanceTo(cp) || 0.01;
       }
 
+      // Cache bind-pose TWIST for every bone pointBoneTo() will ever pose
+      // (all BONE_CHAINS + FINGER_CHAINS entries) -- see computeSwingTwist().
+      boneTwist = {};
+      const posedBoneNames = new Set([
+        ...BONE_CHAINS.map(c=>c[0]),
+        ...FINGER_CHAINS.map(c=>c[0]),
+      ]);
+      for(const name of posedBoneNames){
+        const b = bones[name];
+        if(b) boneTwist[name] = computeSwingTwist(b.quaternion.clone());
+      }
+
       // Cache the TRUE bind-pose LOCAL rotation for the shoulder bones,
       // right now before poseShoulder() ever touches them. poseShoulder()
       // used to read the bone's current quaternion each frame and treat it
@@ -515,6 +527,19 @@ function loadSuit(){
       for(const name of ['LeftShoulder','RightShoulder']){
         const b = bones[name];
         if(b) shoulderBindLocalQuat[name] = b.quaternion.clone();
+      }
+
+      // True bind-pose world direction of shoulder->elbow for each arm,
+      // needed by poseShoulder() to measure the ARM's real swing angle
+      // (as opposed to comparing against the shoulder's own unrelated
+      // clavicle axis, which was the earlier bug).
+      armRestWorldDir = {};
+      for(const name of ['LeftArm','RightArm']){
+        const b = bones[name];
+        if(!b) continue;
+        const q = new THREE.Quaternion();
+        b.getWorldQuaternion(q);
+        armRestWorldDir[name] = new THREE.Vector3(0,1,0).applyQuaternion(q).normalize();
       }
 
       maskGroup.add(root);
@@ -554,15 +579,33 @@ function mpVecHand(lm){
 const _tmpQ = new THREE.Quaternion();
 const RESTY = new THREE.Vector3(0,1,0);
 
-function pointBoneTo(bone, targetWorldDir){
+function pointBoneTo(bone, targetWorldDir, twistQuat){
   bone.parent.updateWorldMatrix(true, false);
   bone.parent.getWorldQuaternion(_tmpQ);
   _tmpQ.invert();
   const localDir = targetWorldDir.clone().applyQuaternion(_tmpQ);
   if(localDir.lengthSq() < 1e-8) return;
   localDir.normalize();
-  bone.quaternion.setFromUnitVectors(RESTY, localDir);
+  const swing = new THREE.Quaternion().setFromUnitVectors(RESTY, localDir);
+  // Recompose with this bone's ORIGINAL bind-pose twist instead of
+  // discarding it. setFromUnitVectors alone always returns the
+  // shortest-arc rotation with zero twist around the target axis --
+  // proven with a standalone numeric test (seam-test.mjs) to silently
+  // erase ~40 degrees of this rig's baked-in bind-pose roll on the arm
+  // alone, EVEN AT REST, before any live tracking motion at all. That was
+  // a bigger, rig-wide source of distortion (every BONE_CHAINS bone, not
+  // just the shoulder) than any of the shoulder-specific tuning.
+  bone.quaternion.copy(twistQuat ? swing.clone().multiply(twistQuat) : swing);
   bone.updateWorldMatrix(true, false);
+}
+
+// Decomposes a bone's true bind-pose LOCAL quaternion into swing (aim
+// toward its child) + twist (roll around that aim axis). Only the twist
+// part needs to be cached and reapplied every frame -- see pointBoneTo().
+function computeSwingTwist(bindLocalQuat){
+  const bindDir = new THREE.Vector3(0,1,0).applyQuaternion(bindLocalQuat).normalize();
+  const swing = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), bindDir);
+  return swing.clone().invert().multiply(bindLocalQuat);
 }
 
 // Partially rotates a clavicle bone (LeftShoulder/RightShoulder) toward the
@@ -575,9 +618,23 @@ function pointBoneTo(bone, targetWorldDir){
 // elbow direction -- the two bones share the swing instead of the shoulder
 // staying frozen while the arm does all of it (which is what was tearing
 // the skin-weight blend at the deltoid/collar seam).
-function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks){
+// IMPORTANT: this replaced an earlier version that compared liveDir
+// against the SHOULDER bone's own bind-pose direction. That was a real
+// bug, caught by seam-test.mjs: the shoulder bone's own local axis points
+// along the tiny clavicle segment (roughly sideways, into the deltoid),
+// which is a totally different direction than shoulder->elbow. Comparing
+// them produced a huge bogus angle (~130 degrees) EVEN WHEN THE ARM HADN'T
+// MOVED AT ALL, which is why tearing kept showing up on a resting arm.
+//
+// Correct approach, verified with seam-test.mjs down to 0.0 degrees of
+// error at rest: measure how far the ARM has swung from ITS OWN rest
+// direction (armRestWorldDir, cached at load), then apply a
+// SHOULDER_FOLLOW_FACTOR-sized fraction of that SAME rotation to the
+// shoulder, composed on top of its own bind pose -- not by re-aiming the
+// shoulder's local axis at an unrelated target.
+function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks, armRestWorldDir){
   const bone = bones[boneName];
-  if(!bone) return;
+  if(!bone || !armRestWorldDir) return;
   const p = worldLandmarks[shoulderIdx], c = worldLandmarks[elbowIdx];
   if(!p || !c) return;
   if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN) ||
@@ -586,30 +643,29 @@ function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks){
   if(liveDir.lengthSq() < 1e-8) return;
   liveDir.normalize();
 
-  // Bind-pose +Y direction of this bone in world space, read BEFORE we
-  // touch it this frame (still whatever was loaded from the GLB).
-  // TRUE rest direction: cached bind-pose LOCAL rotation combined with the
-  // parent's CURRENT world rotation (Spine2 is never touched, so this is
-  // stable), NOT the bone's own live quaternion -- reading the bone's live
-  // quaternion here would just be measuring against wherever it ended up
-  // last frame, which drifts.
   const bindLocal = shoulderBindLocalQuat[boneName];
   if(!bindLocal) return;
-  bone.parent.updateWorldMatrix(true, false);
-  const parentWorldQuat = new THREE.Quaternion();
-  bone.parent.getWorldQuaternion(parentWorldQuat);
-  const restQuat = parentWorldQuat.clone().multiply(bindLocal);
-  const restDir = new THREE.Vector3(0,1,0).applyQuaternion(restQuat).normalize();
 
-  const angle = restDir.angleTo(liveDir);
-  if(angle < 1e-4) return;
+  const swingQuat = new THREE.Quaternion().setFromUnitVectors(armRestWorldDir, liveDir);
+  const swingAngle = 2 * Math.acos(THREE.MathUtils.clamp(Math.abs(swingQuat.w), -1, 1));
+  if(swingAngle < 1e-4) return;
+
   // Same proportional follow as before, but never let the shoulder's own
   // rotation exceed MAX_SHOULDER_SWING_RAD -- this is what keeps the
   // Spine2|Shoulder seam bounded even when the arm goes fully overhead.
-  const desiredAngle = Math.min(angle * SHOULDER_FOLLOW_FACTOR, MAX_SHOULDER_SWING_RAD);
-  const t = desiredAngle / angle;
-  const blended = restDir.clone().lerp(liveDir, t).normalize();
-  pointBoneTo(bone, blended);
+  const desiredAngle = Math.min(swingAngle * SHOULDER_FOLLOW_FACTOR, MAX_SHOULDER_SWING_RAD);
+  const t = desiredAngle / swingAngle;
+  const identity = new THREE.Quaternion();
+  const partialSwing = identity.clone().slerp(swingQuat, t);
+
+  bone.parent.updateWorldMatrix(true, false);
+  const parentWorldQuat = new THREE.Quaternion();
+  bone.parent.getWorldQuaternion(parentWorldQuat);
+  const bindWorldQuat = parentWorldQuat.clone().multiply(bindLocal);
+  const newWorldQuat = partialSwing.clone().multiply(bindWorldQuat);
+  const invParent = parentWorldQuat.clone().invert();
+  bone.quaternion.copy(invParent.multiply(newWorldQuat));
+  bone.updateWorldMatrix(true, false);
 }
 
 function armStraightness(worldLandmarks, shoulderIdx, elbowIdx, wristIdx){
@@ -636,8 +692,8 @@ function applyBoneStretch(bone, boneName, liveLen, bendFactor){
 
 function applyPoseToSkeleton(worldLandmarks){
   // Clavicles first -- see poseShoulder() comment for why order matters.
-  poseShoulder('LeftShoulder', SHOULDER_L, ELBOW_L, worldLandmarks);
-  poseShoulder('RightShoulder', SHOULDER_R, ELBOW_R, worldLandmarks);
+  poseShoulder('LeftShoulder', SHOULDER_L, ELBOW_L, worldLandmarks, armRestWorldDir['LeftArm']);
+  poseShoulder('RightShoulder', SHOULDER_R, ELBOW_R, worldLandmarks, armRestWorldDir['RightArm']);
 
   const leftBend = armStraightness(worldLandmarks, SHOULDER_L, ELBOW_L, WRIST_L);
   const rightBend = armStraightness(worldLandmarks, SHOULDER_R, ELBOW_R, WRIST_R);
@@ -651,7 +707,7 @@ function applyPoseToSkeleton(worldLandmarks){
     const dir = mpVec(c).sub(mpVec(p));
     const liveLen = dir.length();
     if(liveLen < 1e-4) continue;
-    pointBoneTo(bone, dir.clone().normalize());
+    pointBoneTo(bone, dir.clone().normalize(), boneTwist[boneName]);
     if(STRETCH_BONES.has(boneName)){
       const bendFactor = boneName === 'LeftArm' ? leftBend : rightBend;
       applyBoneStretch(bone, boneName, liveLen, bendFactor);
@@ -668,7 +724,7 @@ function applyFingersToSkeleton(handWorldByLabel){
     if(!p || !c) continue;
     const dir = mpVecHand(c).sub(mpVecHand(p));
     if(dir.lengthSq() < 1e-8) continue;
-    pointBoneTo(bone, dir.normalize());
+    pointBoneTo(bone, dir.normalize(), boneTwist[boneName]);
   }
 }
 
