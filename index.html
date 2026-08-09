@@ -221,6 +221,7 @@ let smoothedStretch = {};
 let shoulderBindLocalQuat = {}; // true bind-pose LOCAL rotation, cached once at load
 let armRestWorldDir = {}; // true bind-pose WORLD direction of shoulder->elbow per arm
 let boneTwist = {}; // { boneName: twist quaternion }, cached once at load
+let headBindLocalQuat = null; // bind-pose LOCAL rotation of the Head bone, cached once at load
 
 const MIN_LIVE_SHOULDER_M = 0.15;
 const MAX_LIVE_SHOULDER_M = 0.65;
@@ -529,6 +530,14 @@ function loadSuit(){
         if(b) shoulderBindLocalQuat[name] = b.quaternion.clone();
       }
 
+      // Cache the Head bone's bind-pose LOCAL rotation too. Needed by the
+      // root-rotation split in updatePlacementAndPose(): the face-tracked
+      // pitch/roll (nodding, tilting) is applied ONLY to this bone, on top
+      // of its own bind pose, instead of to the whole root/body.
+      if(bones['Head']){
+        headBindLocalQuat = bones['Head'].quaternion.clone();
+      }
+
       // True bind-pose world direction of shoulder->elbow for each arm,
       // needed by poseShoulder() to measure the ARM's real swing angle
       // (as opposed to comparing against the shoulder's own unrelated
@@ -632,6 +641,16 @@ function computeSwingTwist(bindLocalQuat){
 // SHOULDER_FOLLOW_FACTOR-sized fraction of that SAME rotation to the
 // shoulder, composed on top of its own bind pose -- not by re-aiming the
 // shoulder's local axis at an unrelated target.
+//
+// NOTE: this math assumes the ARM/SHOULDER PARENT CHAIN (Hips/Spine) is
+// sitting in a stable, camera-upright orientation, matching the frame the
+// PoseLandmarker world landmarks are expressed in. That's now guaranteed
+// by updatePlacementAndPose() only feeding YAW into the root and routing
+// head pitch/roll into the Head bone alone -- previously the whole root
+// (and therefore this bone's parent chain) rotated with head pitch/roll
+// too, which silently invalidated this "rest direction" comparison every
+// time you looked down and is what caused the shoulder-seam tearing in
+// practice, not just in the extreme-reach case this constant was tuned for.
 function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks, armRestWorldDir){
   const bone = bones[boneName];
   if(!bone || !armRestWorldDir) return;
@@ -735,8 +754,34 @@ function updatePlacementAndPose(){
   const tilt = THREE.MathUtils.degToRad(parseFloat(rTilt.value));
 
   const base = new THREE.Matrix4();
+  // Pitch/roll left over after the root only takes yaw -- applied to the
+  // Head bone alone, further down, once bones are known to be ready.
+  let headResidualQuat = null;
+
   if(trackingReady && lastMatrixData){
-    base.fromArray(lastMatrixData);
+    const faceMat = new THREE.Matrix4().fromArray(lastMatrixData);
+    const facePos = new THREE.Vector3();
+    const faceQuat = new THREE.Quaternion();
+    const faceScale = new THREE.Vector3();
+    faceMat.decompose(facePos, faceQuat, faceScale);
+
+    // Only let the ROOT (the whole suit) turn left/right with the head
+    // (yaw). Nodding up/down or tilting the head sideways (pitch/roll)
+    // used to be baked into this same root rotation, which meant the
+    // ENTIRE torso/arm/leg chain rotated with a head nod -- looking down
+    // bent the whole body forward at the hips instead of just nodding the
+    // helmet. Worse, PoseLandmarker's world landmarks (which drive the
+    // arm bones below) are expressed in an upright, camera-relative
+    // frame that knows nothing about that extra pitch/roll -- so
+    // pointBoneTo() had to fight it every frame to reach the same live
+    // elbow direction, which is what tore open the shoulder/deltoid seam.
+    // Splitting yaw (root) from pitch/roll (Head bone only, see below)
+    // fixes both symptoms at once.
+    const faceEuler = new THREE.Euler().setFromQuaternion(faceQuat, 'YXZ');
+    const yawOnlyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, faceEuler.y, 0, 'YXZ'));
+    headResidualQuat = yawOnlyQuat.clone().invert().multiply(faceQuat);
+
+    base.compose(facePos, yawOnlyQuat, new THREE.Vector3(1,1,1));
   } else {
     base.compose(
       new THREE.Vector3(manualOffset.x, manualOffset.y, -300),
@@ -771,6 +816,15 @@ function updatePlacementAndPose(){
   maskGroup.matrix.copy(base).multiply(calib);
   maskGroup.matrixWorldNeedsUpdate = true;
   maskGroup.updateMatrixWorld(true);
+
+  // Apply the head's own pitch/roll (nodding, tilting) locally, on top of
+  // its bind pose, now that the root/parent chain is stable. This runs
+  // whenever we have fresh face tracking, independent of poseRetargetEnabled,
+  // since it's driven by the face model, not the body pose model.
+  if(bonesReady && bones['Head'] && headBindLocalQuat && headResidualQuat){
+    bones['Head'].quaternion.copy(headResidualQuat.clone().multiply(headBindLocalQuat));
+    bones['Head'].updateWorldMatrix(true, false);
+  }
 
   if(poseRetargetEnabled && lastPoseWorldLandmarks && bonesReady){
     applyPoseToSkeleton(lastPoseWorldLandmarks);
