@@ -314,6 +314,65 @@ const FINGER_CHAINS = [
   ['RightHandIndex3', INDEX_DIP, INDEX_TIP, 'Right'],
 ];
 
+// Legs sit right at (or past) the bottom edge of frame in a typical
+// chest-up selfie crop -- see the uploaded screenshot. The model still
+// reports "visible" landmarks for them well above 0.5 confidence even
+// when it's essentially guessing, which is what was reading as legs
+// "folding" on their own. Legs get their own, stricter bar.
+const LEG_BONES = new Set(['LeftUpLeg','LeftLeg','LeftFoot','RightUpLeg','RightLeg','RightFoot']);
+const POSE_VISIBILITY_MIN_LEG = 0.8;
+
+// Bind-pose LOCAL rotation for every bone we ever pose (arms, legs,
+// fingers), cached once at load -- see loadSuit(). When a limb loses
+// confident tracking mid-session, we ease its bones back toward THIS
+// instead of freezing at the last (possibly bad) live estimate, so a
+// single noisy frame can't leave a knee or finger stuck bent.
+let boneBindLocalQuat = {};
+const RETURN_TO_BIND_RATE = 0.12;
+
+// Exponential smoothing on raw landmark positions before they ever reach
+// bone math. This is separate from the visibility/confidence gating --
+// gating decides WHETHER to trust a joint this frame, smoothing reduces
+// how much a trusted-but-noisy joint can jump frame to frame. Kept as
+// plain objects keyed by landmark index / hand label so it works for
+// both pose and hand landmark arrays.
+const POSE_LANDMARK_SMOOTH = 0.45;
+const HAND_LANDMARK_SMOOTH = 0.45;
+let smoothedPoseWorldStore = null;
+let smoothedHandWorldStore = {};
+
+function smoothLandmarks(raw, store, alpha){
+  if(!raw) return null;
+  if(!store){
+    store = raw.map(p => p ? { x:p.x, y:p.y, z:p.z, visibility:p.visibility } : null);
+    return store;
+  }
+  for(let i=0;i<raw.length;i++){
+    const r = raw[i];
+    if(!r) continue;
+    let s = store[i];
+    if(!s){ store[i] = { x:r.x, y:r.y, z:r.z, visibility:r.visibility }; continue; }
+    s.x += (r.x - s.x) * alpha;
+    s.y += (r.y - s.y) * alpha;
+    s.z += (r.z - s.z) * alpha;
+    // Visibility is copied raw, not smoothed -- a real loss of tracking
+    // needs to be detected immediately, not eased into.
+    s.visibility = r.visibility;
+  }
+  return store;
+}
+
+// Debounced hand presence: a hand must be seen for HAND_CONFIRM_FRAMES
+// straight frames before we trust it's really there, and must be missing
+// for HAND_DROP_FRAMES straight frames before we consider it gone. This
+// is what stops a single stray misdetection (no real hand in view) from
+// ever reaching the finger bones as a sudden pose.
+const HAND_CONFIRM_FRAMES = 4;
+const HAND_DROP_FRAMES = 6;
+let handSeenStreak = { Left:0, Right:0 };
+let handMissStreak = { Left:0, Right:0 };
+let handConfirmed = { Left:false, Right:false };
+
 let handLandmarker = null;
 let handTrackingReady = false;
 let lastHandLandmarks = [];
@@ -519,7 +578,15 @@ async function loadTracking(){
         delegate: "GPU"
       },
       runningMode: "VIDEO",
-      numPoses: 1
+      numPoses: 1,
+      // Defaults (0.5) are loose enough that a joint sitting just outside
+      // frame -- legs, in a typical chest-up selfie crop -- still gets
+      // reported as "tracked" with a guessed, unstable position instead
+      // of being flagged low-confidence. Raising these makes the model
+      // itself reject more of that guesswork before it ever reaches us.
+      minPoseDetectionConfidence: 0.6,
+      minPosePresenceConfidence: 0.6,
+      minTrackingConfidence: 0.6
     });
     poseTrackingReady = true;
   }catch(e){
@@ -534,7 +601,14 @@ async function loadTracking(){
         delegate: "GPU"
       },
       runningMode: "VIDEO",
-      numHands: 2
+      numHands: 2,
+      // Same reasoning as pose above -- the default 0.5 lets a hand-shaped
+      // patch of background (a fist-sized shadow, a sleeve fold) register
+      // as a detected hand for a stray frame, which is what reads as
+      // "vibrating" fingers when no hand is actually there.
+      minHandDetectionConfidence: 0.65,
+      minHandPresenceConfidence: 0.65,
+      minTrackingConfidence: 0.6
     });
     handTrackingReady = true;
   }catch(e){
@@ -616,14 +690,20 @@ function loadSuit(){
 
       // Cache bind-pose TWIST for every bone pointBoneTo() will ever pose
       // (all BONE_CHAINS + FINGER_CHAINS entries) -- see computeSwingTwist().
+      // Also cache each bone's raw bind-pose LOCAL rotation itself
+      // (boneBindLocalQuat) -- used to ease a limb back to neutral when
+      // tracking for it drops out, see applyPoseToSkeleton/applyFingersToSkeleton.
       boneTwist = {};
+      boneBindLocalQuat = {};
       const posedBoneNames = new Set([
         ...BONE_CHAINS.map(c=>c[0]),
         ...FINGER_CHAINS.map(c=>c[0]),
       ]);
       for(const name of posedBoneNames){
         const b = bones[name];
-        if(b) boneTwist[name] = computeSwingTwist(b.quaternion.clone());
+        if(!b) continue;
+        boneTwist[name] = computeSwingTwist(b.quaternion.clone());
+        boneBindLocalQuat[name] = b.quaternion.clone();
       }
 
       // Cache the TRUE bind-pose LOCAL rotation for the shoulder bones,
@@ -801,17 +881,41 @@ function applyPoseToSkeleton(worldLandmarks){
   for(const [boneName, pIdx, cIdx] of BONE_CHAINS){
     const bone = bones[boneName];
     if(!bone) continue;
+    const isLeg = LEG_BONES.has(boneName);
+    const visMin = isLeg ? POSE_VISIBILITY_MIN_LEG : POSE_VISIBILITY_MIN;
     const p = worldLandmarks[pIdx], c = worldLandmarks[cIdx];
-    if(!p || !c) continue;
-    if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN) ||
-       (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN)) continue;
-    const dir = mpVec(c).sub(mpVec(p));
-    const liveLen = dir.length();
-    if(liveLen < 1e-4) continue;
-    pointBoneTo(bone, dir.clone().normalize(), boneTwist[boneName]);
-    if(STRETCH_BONES.has(boneName)){
-      const bendFactor = boneName === 'LeftArm' ? leftBend : rightBend;
-      applyBoneStretch(bone, boneName, liveLen, bendFactor);
+    const visible = p && c &&
+      (p.visibility === undefined || p.visibility >= visMin) &&
+      (c.visibility === undefined || c.visibility >= visMin);
+
+    if(visible){
+      const dir = mpVec(c).sub(mpVec(p));
+      const liveLen = dir.length();
+      if(liveLen >= 1e-4){
+        pointBoneTo(bone, dir.clone().normalize(), boneTwist[boneName]);
+        if(STRETCH_BONES.has(boneName)){
+          const bendFactor = boneName === 'LeftArm' ? leftBend : rightBend;
+          applyBoneStretch(bone, boneName, liveLen, bendFactor);
+        }
+        continue;
+      }
+    }
+
+    // Not confidently tracked this frame (out of frame, occluded, or
+    // below this bone's confidence bar) -- ease back toward bind pose
+    // instead of freezing at the last estimate. This is what stops legs
+    // from getting stuck "folded" the moment the camera can't see them,
+    // and stops a single noisy frame anywhere from sticking around.
+    const bindQ = boneBindLocalQuat[boneName];
+    if(bindQ){
+      bone.quaternion.slerp(bindQ, RETURN_TO_BIND_RATE);
+      bone.updateWorldMatrix(true, false);
+      if(STRETCH_BONES.has(boneName)){
+        const prev = smoothedStretch[boneName];
+        const next = (prev === undefined) ? 1 : prev + (1 - prev) * RETURN_TO_BIND_RATE;
+        smoothedStretch[boneName] = next;
+        bone.scale.set(1, next, 1);
+      }
     }
   }
 }
@@ -819,13 +923,25 @@ function applyPoseToSkeleton(worldLandmarks){
 function applyFingersToSkeleton(handWorldByLabel){
   for(const [boneName, pIdx, cIdx, label] of FINGER_CHAINS){
     const bone = bones[boneName];
-    const hand = handWorldByLabel[label];
-    if(!bone || !hand) continue;
-    const p = hand[pIdx], c = hand[cIdx];
-    if(!p || !c) continue;
-    const dir = mpVecHand(c).sub(mpVecHand(p));
-    if(dir.lengthSq() < 1e-8) continue;
-    pointBoneTo(bone, dir.normalize(), boneTwist[boneName]);
+    if(!bone) continue;
+    // Only ever drive fingers from a hand that's passed the debounced
+    // presence check (see loop()) -- a hand present in handWorldByLabel
+    // this single frame but not yet/no-longer confirmed is exactly the
+    // false-positive case that was causing fingers to vibrate.
+    const hand = handConfirmed[label] ? handWorldByLabel[label] : null;
+    const p = hand && hand[pIdx], c = hand && hand[cIdx];
+    if(p && c){
+      const dir = mpVecHand(c).sub(mpVecHand(p));
+      if(dir.lengthSq() >= 1e-8){
+        pointBoneTo(bone, dir.normalize(), boneTwist[boneName]);
+        continue;
+      }
+    }
+    const bindQ = boneBindLocalQuat[boneName];
+    if(bindQ){
+      bone.quaternion.slerp(bindQ, RETURN_TO_BIND_RATE);
+      bone.updateWorldMatrix(true, false);
+    }
   }
 }
 
@@ -925,7 +1041,8 @@ async function loop(){
       lastPoseLandmarks = poseResults.landmarks[0];
     }
     if(poseResults.worldLandmarks && poseResults.worldLandmarks.length){
-      lastPoseWorldLandmarks = poseResults.worldLandmarks[0];
+      smoothedPoseWorldStore = smoothLandmarks(poseResults.worldLandmarks[0], smoothedPoseWorldStore, POSE_LANDMARK_SMOOTH);
+      lastPoseWorldLandmarks = smoothedPoseWorldStore;
     }
   }
   if(handTrackingReady && handLandmarker && video.readyState >= 2){
@@ -933,13 +1050,35 @@ async function loop(){
     if(handResults.landmarks){
       lastHandLandmarks = handResults.landmarks;
     }
+    const seenThisFrame = { Left:false, Right:false };
     if(handResults.worldLandmarks && handResults.handednesses){
       const byLabel = {};
       for(let i=0;i<handResults.worldLandmarks.length;i++){
         const cat = handResults.handednesses[i] && handResults.handednesses[i][0];
-        if(cat && cat.categoryName) byLabel[cat.categoryName] = handResults.worldLandmarks[i];
+        if(cat && cat.categoryName){
+          const label = cat.categoryName;
+          smoothedHandWorldStore[label] = smoothLandmarks(handResults.worldLandmarks[i], smoothedHandWorldStore[label], HAND_LANDMARK_SMOOTH);
+          byLabel[label] = smoothedHandWorldStore[label];
+          seenThisFrame[label] = true;
+        }
       }
       lastHandWorldByLabel = byLabel;
+    }
+    // Debounce presence per hand -- see the constants above loadTracking()
+    // for why. A hand only counts as "confirmed" after several straight
+    // frames of detection, and only drops after several straight frames
+    // of absence, so one stray misdetection (or one stray miss on a real
+    // hand) can't flip fingers on/off and cause the vibrating look.
+    for(const label of ['Left','Right']){
+      if(seenThisFrame[label]){
+        handSeenStreak[label]++;
+        handMissStreak[label] = 0;
+        if(handSeenStreak[label] >= HAND_CONFIRM_FRAMES) handConfirmed[label] = true;
+      } else {
+        handMissStreak[label]++;
+        handSeenStreak[label] = 0;
+        if(handMissStreak[label] >= HAND_DROP_FRAMES) handConfirmed[label] = false;
+      }
     }
   }
 
