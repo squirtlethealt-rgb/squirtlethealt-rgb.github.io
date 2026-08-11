@@ -143,7 +143,7 @@
   </div>
   <div class="sheet-row">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-    <input type="range" id="rHeight" min="-120" max="120" step="0.5" value="0">
+    <input type="range" id="rHeight" min="-120" max="120" step="0.5" value="15">
   </div>
   <div class="sheet-row">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.5-7.1"/><polyline points="21 3 21 9 15 9"/></svg>
@@ -236,6 +236,12 @@ let helmetRemoved = false;
 // Standard MediaPipe face-mesh "face oval" landmark loop (ordered so
 // consecutive indices trace the outline), used to build the clip path.
 const FACE_OVAL_LOOP = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+// How far the visible cutout is grown beyond the raw face-oval landmarks,
+// scaled outward from the oval's own centroid -- see drawFaceCutout().
+// 1.0 = exactly the landmark outline (was clipping right at the jaw/
+// hairline edge). Kept modest so it still reads as "your face", not a
+// big flat patch of video pasted over the helmet.
+const FACE_CUTOUT_EXPAND = 1.18;
 
 let faceLandmarker = null;
 let trackingReady = false;
@@ -1162,13 +1168,28 @@ function drawFaceCutout(){
   faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
   if(!helmetRemoved || !lastFaceLandmarks) return;
 
-  faceCtx.save();
-  faceCtx.beginPath();
+  // Collect the raw oval points first (in pixel space) so we can grow the
+  // clip region outward from its own centroid before drawing it -- using
+  // the exact face-oval landmarks as the clip path was cutting right at
+  // the jaw/hairline edge, which left a sliver of visor/helmet showing at
+  // the boundary on some faces. Scaling every point out from the shape's
+  // center by FACE_CUTOUT_EXPAND gives the same oval a bit of margin on
+  // all sides without changing how it tracks.
+  const pts = [];
   for(let i=0;i<FACE_OVAL_LOOP.length;i++){
     const lm = lastFaceLandmarks[FACE_OVAL_LOOP[i]];
-    if(!lm) { faceCtx.restore(); return; }
-    const x = lm.x * faceCanvas.width;
-    const y = lm.y * faceCanvas.height;
+    if(!lm) return;
+    pts.push({ x: lm.x * faceCanvas.width, y: lm.y * faceCanvas.height });
+  }
+  let cx = 0, cy = 0;
+  for(const p of pts){ cx += p.x; cy += p.y; }
+  cx /= pts.length; cy /= pts.length;
+
+  faceCtx.save();
+  faceCtx.beginPath();
+  for(let i=0;i<pts.length;i++){
+    const x = cx + (pts[i].x - cx) * FACE_CUTOUT_EXPAND;
+    const y = cy + (pts[i].y - cy) * FACE_CUTOUT_EXPAND;
     if(i === 0) faceCtx.moveTo(x, y); else faceCtx.lineTo(x, y);
   }
   faceCtx.closePath();
