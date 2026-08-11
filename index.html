@@ -102,7 +102,7 @@
       <button class="icon-btn" id="settingsBtn" aria-label="settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
-      <button class="icon-btn" id="helmetBtn" aria-label="toggle helmet">
+      <button class="icon-btn" id="helmetBtn" aria-label="open or close the visor">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13a8 8 0 0 1 16 0v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 13h16"/></svg>
       </button>
     </div>
@@ -218,16 +218,19 @@ let poseRetargetEnabled = true;
 let flip180 = DEFAULT_FLIP;
 let envEnabled = true;
 
-// Helmet removal: rather than trying to texture-map live video onto the
+// Visor open/close: rather than trying to texture-map live video onto the
 // 3D head bone (which would drift out of alignment any time our assumed
-// camera FOV doesn't exactly match the device's real one), we hide the
-// helmet's own mesh groups and draw the real face as a flat 2D cutout of
+// camera FOV doesn't exactly match the device's real one), we hide just
+// the visor pane's own mesh (see loadSuit() -- it's picked out from the
+// helmet shell/neck-ring by color, since it's the only one authored as
+// near-black tinted glass) and draw the real face as a flat 2D cutout of
 // the (already-hidden) video feed, clipped to the live face-oval
 // landmarks and drawn on its own canvas layer. Because it uses the exact
 // same landmark coordinates and canvas transform as the tracking dots,
 // it stays pixel-aligned with the face regardless of any 3D camera
 // mismatch -- and because it's clipped to just the oval, nothing else
-// from the real room is ever shown.
+// from the real room is ever shown. The helmet shell and neck ring stay
+// visible throughout, so this reads as "visor up", not "helmet gone".
 let helmetMeshes = [];
 let helmetRemoved = false;
 // Standard MediaPipe face-mesh "face oval" landmark loop (ordered so
@@ -654,7 +657,15 @@ function loadSuit(){
     loader.setCrossOrigin('anonymous');
     loader.load(SUIT_URL, (gltf)=>{
       const root = gltf.scene;
-      helmetMeshes = [];
+      // Every "aceshelme"-family mesh we find while traversing -- the
+      // helmet on this suit is authored as three separate primitives
+      // sharing that material family: the outer shell, the neck ring, and
+      // the visor pane. We collect all three here and sort out which one
+      // is actually the visor afterward (see below), instead of treating
+      // the whole family as one "helmet" blob -- opening the visor should
+      // leave the shell and neck ring in place, not remove the helmet
+      // entirely.
+      const helmetFamily = [];
       root.traverse(o=>{
         if(o.isMesh){
           o.frustumCulled = false;
@@ -676,17 +687,28 @@ function loadSuit(){
             if(n.includes('interior')){
               mat.side = THREE.FrontSide;
             }
-            // This GLB's helmet (shell + visor + neck ring) is authored
-            // as three distinct primitives/materials named "aceshelme" --
-            // confirmed by inspecting the file's material list directly,
-            // separate from the suit body, gloves, and boots. Hiding just
-            // these meshes removes the whole helmet cleanly.
-            if(n.includes('aceshelme') && !helmetMeshes.includes(o)){
-              helmetMeshes.push(o);
+            if(n.includes('aceshelme') && !helmetFamily.some(h=>h.mesh===o)){
+              const c = mat.color;
+              // Perceived brightness of this primitive's base color. On
+              // this GLB the visor is authored essentially black (tinted
+              // glass) while the shell is near-white and the neck ring is
+              // mid-grey -- confirmed by inspecting the file's material
+              // list directly. Picking the visor out by brightness (not
+              // by name suffix, which can shift across re-exports) is
+              // what lets "open visor" hide only the glass pane.
+              const brightness = c ? (c.r + c.g + c.b) / 3 : 1;
+              helmetFamily.push({ mesh: o, brightness });
             }
           }
         }
       });
+      // Only the meshes authored near-black are treated as the visor. A
+      // hard threshold (rather than always taking the single darkest
+      // entry) means that if this suit is ever re-exported with a
+      // lighter-tinted visor, or the visor turns out to be more than one
+      // primitive, we still fail safe -- worst case nothing opens, rather
+      // than accidentally hiding the shell or neck ring by mistake.
+      helmetMeshes = helmetFamily.filter(h => h.brightness < 0.2).map(h => h.mesh);
 
       bones = {};
       root.traverse(o=>{
