@@ -266,6 +266,18 @@ let smoothedScale = null;
 
 const BONE_CHAIN_NEXT = { 'LeftArm':'LeftForeArm', 'RightArm':'RightForeArm' };
 const STRETCH_BONES = new Set(Object.keys(BONE_CHAIN_NEXT));
+// Live-length arm stretching (scaling LeftArm/RightArm to match the
+// tracked shoulder-to-elbow distance) exists to compensate for depth
+// mismatches between the real body's proportions and the suit's rig --
+// useful when the suit needs to visually "fit" whatever's actually in
+// frame. With the visor open, the real suit's own proportions are what's
+// meant to show, so stretching it away from its authored shape reads as
+// wrong rather than helpful (and it was one more source of scale
+// mismatch at the shoulder/deltoid seam on top of the rotation gap
+// poseShoulder() already had to fix). Left the whole mechanism in place,
+// just switched off, in case a use case comes back where compensating
+// for a real body's proportions is wanted again.
+const ENABLE_ARM_STRETCH = false;
 let boneRestLength = {};
 let smoothedStretch = {};
 let shoulderBindLocalQuat = {}; // true bind-pose LOCAL rotation, cached once at load
@@ -306,20 +318,33 @@ const POSE_VISIBILITY_MIN = 0.5;
 // the same blended vertices, which tears the mesh into the spiky
 // "candy wrapper" shapes seen at the deltoid/collar seam. Partially
 // rotating the shoulder toward the same direction closes that gap.
-// 0 = old frozen behavior. 1 = shoulder fully tracks (looks robotic).
-// Tuned numerically against seam-test.mjs (not by eye): 0.5 is the value
-// that minimizes the WORSE of the two seam mismatches (chest seam vs
-// elbow-side seam) across the whole 0-90 degree "normal pose" range --
-// verified to keep both seams under the 40-degree tear-risk threshold for
-// arms at sides through full shoulder-height raise. See seam-test.mjs for
-// the full sweep and how this number was derived.
-const SHOULDER_FOLLOW_FACTOR = 0.5;
+// A single fixed factor (0 = old frozen behavior, 1 = shoulder fully
+// tracks and looks robotic) was originally tuned numerically against
+// seam-test.mjs only across the 0-90 degree "normal pose" range -- a
+// flat 0.5 was the value that minimized the WORSE of the two seam
+// mismatches (chest seam vs elbow-side seam) across THAT range. But a
+// fixed blend that's correct at rest is necessarily too conservative
+// right at the top of that range: raised-arm / shoulder-height poses
+// (confirmed by a user screenshot showing chest-seam tearing with arms
+// out near shoulder height) need the shoulder absorbing noticeably more
+// of the swing than a resting arm does, or the still-large local gap
+// between Shoulder and Arm tears the shared skin weights just like the
+// frozen-shoulder case did. shoulderFollowFactor() ramps the blend up
+// as the live swing angle grows, instead of using one number for every
+// pose.
+function shoulderFollowFactor(swingAngleDeg){
+  const t = THREE.MathUtils.clamp(swingAngleDeg / 90, 0, 1);
+  return THREE.MathUtils.lerp(0.5, 0.85, t);
+}
 // Hard ceiling on how far the clavicle itself is allowed to swing, in
-// degrees, no matter how extreme the tracked arm direction is. Only
-// engages well past shoulder height (>~112 degrees at this factor), so it
-// has no effect on the normal-pose range this is tuned for -- it just
-// keeps the overhead case from swinging the chest seam open completely.
-const MAX_SHOULDER_SWING_DEG = 40;
+// degrees, no matter how extreme the tracked arm direction is. Raised
+// from the original 40 degrees -- that cap engaged right around
+// shoulder-height raise (the exact pose that was tearing), freezing the
+// shoulder exactly when shoulderFollowFactor() above was asking it to
+// absorb the most. Still exists so a fully overhead reach doesn't swing
+// the chest seam open completely, it just no longer clips in during the
+// normal shoulder-height range.
+const MAX_SHOULDER_SWING_DEG = 65;
 const MAX_SHOULDER_SWING_RAD = THREE.MathUtils.degToRad(MAX_SHOULDER_SWING_DEG);
 
 const BONE_CHAINS = [
@@ -900,7 +925,8 @@ function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks, armRestWo
   const swingAngle = 2 * Math.acos(THREE.MathUtils.clamp(Math.abs(swingQuat.w), -1, 1));
   if(swingAngle < 1e-4) return;
 
-  const desiredAngle = Math.min(swingAngle * SHOULDER_FOLLOW_FACTOR, MAX_SHOULDER_SWING_RAD);
+  const followFactor = shoulderFollowFactor(THREE.MathUtils.radToDeg(swingAngle));
+  const desiredAngle = Math.min(swingAngle * followFactor, MAX_SHOULDER_SWING_RAD);
   const t = desiredAngle / swingAngle;
   const identity = new THREE.Quaternion();
   const partialSwing = identity.clone().slerp(swingQuat, t);
@@ -959,7 +985,7 @@ function applyPoseToSkeleton(worldLandmarks){
       const liveLen = dir.length();
       if(liveLen >= 1e-4){
         pointBoneTo(bone, dir.clone().normalize(), boneTwist[boneName]);
-        if(STRETCH_BONES.has(boneName)){
+        if(ENABLE_ARM_STRETCH && STRETCH_BONES.has(boneName)){
           const bendFactor = boneName === 'LeftArm' ? leftBend : rightBend;
           applyBoneStretch(bone, boneName, liveLen, bendFactor);
         }
@@ -976,7 +1002,7 @@ function applyPoseToSkeleton(worldLandmarks){
     if(bindQ){
       bone.quaternion.slerp(bindQ, RETURN_TO_BIND_RATE);
       bone.updateWorldMatrix(true, false);
-      if(STRETCH_BONES.has(boneName)){
+      if(ENABLE_ARM_STRETCH && STRETCH_BONES.has(boneName)){
         const prev = smoothedStretch[boneName];
         const next = (prev === undefined) ? 1 : prev + (1 - prev) * RETURN_TO_BIND_RATE;
         smoothedStretch[boneName] = next;
