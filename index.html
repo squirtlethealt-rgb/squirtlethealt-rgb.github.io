@@ -1080,7 +1080,25 @@ function updatePlacementAndPose(){
   maskGroup.updateMatrixWorld(true);
 
   if(bonesReady && bones['Head'] && headBindLocalQuat && headResidualQuat){
-    bones['Head'].quaternion.copy(headResidualQuat.clone().multiply(headBindLocalQuat));
+    // headResidualQuat is a WORLD-space delta ("how much more than the
+    // yaw-only body the head has turned"). It's tempting to just post-
+    // multiply it onto the Head bone's bind-pose LOCAL rotation, but that
+    // silently assumes Head's parent chain (Neck -> Spine -> Hips) has
+    // zero rotation of its own -- on this rig each of those bones carries
+    // its own non-identity bind-pose orientation. Skipping them baked in
+    // a fixed skew between the 3D head/visor and the real tracked face,
+    // which grew more visible the more the head tilted (the diagonal
+    // drift between the face cutout and the visor opening).
+    // Reading the Head bone's ACTUAL current parent world rotation (Neck's
+    // world quat, which already reflects the yaw-only body transform PLUS
+    // every intermediate bind-pose rotation, since none of those bones are
+    // touched elsewhere) gives the real baseline to build on instead of
+    // assuming it's just the body's yaw.
+    const headParentWorldQuat = new THREE.Quaternion();
+    bones['Head'].parent.getWorldQuaternion(headParentWorldQuat);
+    const headBaselineWorldQuat = headParentWorldQuat.clone().multiply(headBindLocalQuat);
+    const headFinalWorldQuat = headResidualQuat.clone().multiply(headBaselineWorldQuat);
+    bones['Head'].quaternion.copy(headParentWorldQuat.clone().invert().multiply(headFinalWorldQuat));
     bones['Head'].updateWorldMatrix(true, false);
   }
 
