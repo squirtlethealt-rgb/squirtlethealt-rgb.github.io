@@ -325,26 +325,30 @@ const POSE_VISIBILITY_MIN = 0.5;
 // mismatches (chest seam vs elbow-side seam) across THAT range. But a
 // fixed blend that's correct at rest is necessarily too conservative
 // right at the top of that range: raised-arm / shoulder-height poses
-// (confirmed by a user screenshot showing chest-seam tearing with arms
+// (confirmed by user screenshots showing chest-seam tearing with arms
 // out near shoulder height) need the shoulder absorbing noticeably more
 // of the swing than a resting arm does, or the still-large local gap
 // between Shoulder and Arm tears the shared skin weights just like the
 // frozen-shoulder case did. shoulderFollowFactor() ramps the blend up
 // as the live swing angle grows, instead of using one number for every
-// pose.
+// pose. First pass (0.5 -> 0.85, capped at 65 degrees) still left a
+// ~25-degree gap at a fully horizontal, shoulder-height arm (swing ~90
+// degrees) -- confirmed still tearing there -- so both the ramp's top end
+// and the cap below are pushed further out to close that remaining gap
+// for exactly the pose that was still failing.
 function shoulderFollowFactor(swingAngleDeg){
   const t = THREE.MathUtils.clamp(swingAngleDeg / 90, 0, 1);
-  return THREE.MathUtils.lerp(0.5, 0.85, t);
+  return THREE.MathUtils.lerp(0.5, 0.95, t);
 }
 // Hard ceiling on how far the clavicle itself is allowed to swing, in
 // degrees, no matter how extreme the tracked arm direction is. Raised
-// from the original 40 degrees -- that cap engaged right around
-// shoulder-height raise (the exact pose that was tearing), freezing the
-// shoulder exactly when shoulderFollowFactor() above was asking it to
-// absorb the most. Still exists so a fully overhead reach doesn't swing
-// the chest seam open completely, it just no longer clips in during the
-// normal shoulder-height range.
-const MAX_SHOULDER_SWING_DEG = 65;
+// from 40 to 65 degrees, then to 85: a fully horizontal, shoulder-height
+// arm needs the clavicle able to reach ~85-90 degrees of swing for the
+// gap versus the arm bone to stay small; 65 was still capping well short
+// of that and freezing the shoulder exactly where it needed to keep
+// moving. Left just short of a full 90 so a genuinely overhead reach
+// still doesn't swing the chest seam open completely.
+const MAX_SHOULDER_SWING_DEG = 85;
 const MAX_SHOULDER_SWING_RAD = THREE.MathUtils.degToRad(MAX_SHOULDER_SWING_DEG);
 
 const BONE_CHAINS = [
