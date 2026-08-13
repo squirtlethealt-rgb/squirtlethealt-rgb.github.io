@@ -518,7 +518,7 @@ nameInput.addEventListener('keydown', (e) => {
 launchBtn.addEventListener('click', () => {
   userName = nameInput.value.trim();
   if(!userName) return;
-  textLine2.innerHTML = `I am <em>${userName}</em>, a Vyomnaut`;
+  textLine2.innerHTML = `I am <em>${userName}</em>, a future Vyomnaut`;
   launchBtn.classList.add('loading');
   launchBtn.textContent = 'Initializing…';
   namePrompt.style.display = 'none';
@@ -745,6 +745,15 @@ function loadSuit(){
       // primitive, we still fail safe -- worst case nothing opens, rather
       // than accidentally hiding the shell or neck ring by mistake.
       helmetMeshes = helmetFamily.filter(h => h.brightness < 0.2).map(h => h.mesh);
+      // Store original materials so we can toggle between opaque and
+      // semi-transparent (tinted glass) instead of fully hiding the visor.
+      for(const m of helmetMeshes){
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        for(const mat of mats){
+          mat._origOpacity = mat.opacity;
+          mat._origTransparent = mat.transparent;
+        }
+      }
 
       bones = {};
       root.traverse(o=>{
@@ -1353,7 +1362,7 @@ snapBtn.addEventListener('click', ()=>{
   // Line 2: vyomnaut name
   sctx.font = `400 ${fontSize2}px Outfit, sans-serif`;
   sctx.fillStyle = '#ffffff';
-  sctx.fillText(`I am ${userName}, a Vyomnaut`, tw/2, textY + fontSize1 + 8);
+  sctx.fillText(`I am ${userName}, a future Vyomnaut`, tw/2, textY + fontSize1 + 8);
   sctx.shadowBlur = 0;
 
   const dataUrl = shot.toDataURL('image/png');
@@ -1394,12 +1403,26 @@ envBtn.addEventListener('click', ()=>{
 
 helmetBtn.addEventListener('click', ()=>{
   helmetRemoved = !helmetRemoved;
-  for(const m of helmetMeshes) m.visible = !helmetRemoved;
+  // Instead of hiding the visor entirely, make it semi-transparent (tinted
+  // glass look) so the face cutout shows through but alignment drift is
+  // masked by the tint overlay.
+  for(const m of helmetMeshes){
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for(const mat of mats){
+      if(helmetRemoved){
+        mat.transparent = true;
+        mat.opacity = 0.18;
+        mat.depthWrite = false;
+      } else {
+        mat.transparent = mat._origTransparent || false;
+        mat.opacity = mat._origOpacity !== undefined ? mat._origOpacity : 1;
+        mat.depthWrite = true;
+      }
+      mat.needsUpdate = true;
+    }
+  }
   helmetBtn.classList.toggle('active', helmetRemoved);
   if(!helmetRemoved){
-    // Clear immediately rather than waiting for the next drawFaceCutout()
-    // call, so there's no one-frame flash of a stale face cutout when
-    // switching back to helmet-on.
     faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
   }
 });
