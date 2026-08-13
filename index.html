@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>Gaganyatri Lens</title>
+<title>Gaganyatri Lens — ISRO 57th Anniversary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
   :root{
     --saffron:#FF9933;
@@ -58,15 +61,39 @@
   .toggle-row{display:flex;gap:10px;padding:8px 0 4px;}
   .toggle-row .icon-btn{background:#1c1f30;}
 
-  .start-overlay{position:absolute;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:20;}
+  .start-overlay{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%, #0d1230 0%, #000 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;padding:24px;}
   .start-overlay.hidden{display:none;}
-  .start-ring{width:84px;height:84px;border-radius:50%;padding:5px;background:conic-gradient(var(--saffron),var(--white) 33%,var(--white) 66%,var(--green));cursor:pointer;}
+
+  /* --- Name prompt modal --- */
+  .name-prompt{display:flex;flex-direction:column;align-items:center;gap:18px;max-width:340px;width:100%;}
+  .name-prompt h1{font-family:'Orbitron',sans-serif;font-weight:700;font-size:clamp(16px,4.5vw,22px);color:var(--saffron);text-align:center;margin:0;letter-spacing:1px;text-transform:uppercase;line-height:1.3;}
+  .name-prompt h1 span{display:block;font-size:clamp(11px,3vw,14px);color:rgba(255,255,255,0.7);font-family:'Outfit',sans-serif;font-weight:300;letter-spacing:0.5px;text-transform:none;margin-top:6px;}
+  .name-prompt .isro-badge{width:72px;height:72px;border-radius:50%;padding:4px;background:conic-gradient(var(--saffron),var(--white) 33%,var(--white) 66%,var(--green));margin-bottom:4px;}
+  .name-prompt .isro-badge-inner{width:100%;height:100%;border-radius:50%;background:#0a0c14;display:flex;align-items:center;justify-content:center;}
+  .name-prompt .isro-badge-inner svg{width:28px;height:28px;color:#fff;}
+  .name-input-wrap{width:100%;position:relative;}
+  .name-input-wrap input{width:100%;padding:14px 18px;border-radius:14px;border:1.5px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;font:16px 'Outfit',sans-serif;outline:none;transition:border-color .2s;}
+  .name-input-wrap input::placeholder{color:rgba(255,255,255,0.35);}
+  .name-input-wrap input:focus{border-color:var(--saffron);}
+  .launch-btn{width:100%;padding:14px 0;border:none;border-radius:14px;background:linear-gradient(135deg, var(--saffron), #e67e22);color:#fff;font:600 16px 'Outfit',sans-serif;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:transform .15s, opacity .15s;}
+  .launch-btn:active{transform:scale(0.97);}
+  .launch-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .launch-btn.loading{pointer-events:none;}
+
+  .start-ring{width:84px;height:84px;border-radius:50%;padding:5px;background:conic-gradient(var(--saffron),var(--white) 33%,var(--white) 66%,var(--green));cursor:pointer;display:none;}
   .start-ring-inner{width:100%;height:100%;border-radius:50%;background:#0a0c14;display:flex;align-items:center;justify-content:center;color:#fff;}
   .start-ring-inner svg{width:32px;height:32px;}
   .start-ring.spinning .start-ring-inner svg{animation:spin 1s linear infinite;}
   .start-ring.err{background:conic-gradient(#ff6b4d,#ff6b4d);}
-  .err-msg{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 30px);left:20px;right:20px;text-align:center;color:#ff6b4d;font:13px/1.4 -apple-system,sans-serif;display:none;}
+  .err-msg{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 30px);left:20px;right:20px;text-align:center;color:#ff6b4d;font:13px/1.4 'Outfit',sans-serif;display:none;}
   .err-msg.show{display:block;}
+
+  /* --- Text overlay (visible during AR session) --- */
+  .text-overlay{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 100px);z-index:10;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;opacity:0;transition:opacity .5s;}
+  .text-overlay.visible{opacity:1;}
+  .text-overlay .line1{font-family:'Orbitron',sans-serif;font-weight:700;font-size:clamp(11px,3.2vw,18px);color:var(--saffron);text-align:center;text-shadow:0 1px 8px rgba(0,0,0,0.8);letter-spacing:1.5px;text-transform:uppercase;padding:0 16px;}
+  .text-overlay .line2{font-family:'Outfit',sans-serif;font-weight:400;font-size:clamp(13px,3.8vw,20px);color:#fff;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,0.8);padding:0 16px;}
+  .text-overlay .line2 em{font-style:normal;color:var(--saffron);font-weight:600;}
 </style>
 </head>
 <body>
@@ -120,7 +147,24 @@
     </div>
   </div>
 
+  <div class="text-overlay" id="textOverlay">
+    <div class="line1" id="textLine1">Happy 57th Anniversary of ISRO 🚀</div>
+    <div class="line2" id="textLine2"></div>
+  </div>
+
   <div class="start-overlay" id="status">
+    <div class="name-prompt" id="namePrompt">
+      <div class="isro-badge">
+        <div class="isro-badge-inner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+      </div>
+      <h1>Gaganyatri Lens<span>Celebrating 57 Years of ISRO — 15 August 2026</span></h1>
+      <div class="name-input-wrap">
+        <input type="text" id="nameInput" placeholder="Enter your name" autocomplete="off" maxlength="30">
+      </div>
+      <button class="launch-btn" id="launchBtn" disabled>Launch Camera 🛸</button>
+    </div>
     <div class="start-ring" id="startBtn">
       <div class="start-ring-inner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -449,6 +493,33 @@ const HAND_CONNECTIONS = [
 ];
 let dragging = false, dragStart = {x:0,y:0};
 let cameraStarted = false;
+let userName = '';
+
+const nameInput = document.getElementById('nameInput');
+const launchBtn = document.getElementById('launchBtn');
+const namePrompt = document.getElementById('namePrompt');
+const textOverlay = document.getElementById('textOverlay');
+const textLine2 = document.getElementById('textLine2');
+
+nameInput.addEventListener('input', () => {
+  launchBtn.disabled = nameInput.value.trim().length === 0;
+});
+nameInput.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter' && nameInput.value.trim()) launchBtn.click();
+});
+
+launchBtn.addEventListener('click', () => {
+  userName = nameInput.value.trim();
+  if(!userName) return;
+  textLine2.innerHTML = `I am <em>${userName}</em>, a Vyomnaut`;
+  launchBtn.classList.add('loading');
+  launchBtn.textContent = 'Initializing…';
+  namePrompt.style.display = 'none';
+  startBtn.style.display = 'block';
+  startBtn.classList.add('spinning');
+  cameraStarted = true;
+  startCamera();
+});
 
 function setViewfinderAspect(w, h){
   dotsCanvas.width = w;
@@ -488,6 +559,8 @@ async function startCamera(){
     }
 
     statusEl.classList.add('hidden');
+    // Show the text overlay with a slight delay for a nice entrance
+    setTimeout(() => textOverlay.classList.add('visible'), 400);
     requestAnimationFrame(loop);
   }catch(err){
     console.error(err);
@@ -523,9 +596,9 @@ function initThree(){
 }
 
 // Builds the virtual environment backdrop using the spacecraft interior
-// photograph (bg.jpg.jpeg) as a large textured plane behind the suit.
-// The plane is oversized relative to the viewport so head-tracked parallax
-// can shift it without exposing edges.
+// photograph (bg.jpg.jpeg) as a textured plane behind the suit. Uses
+// "cover" sizing so the image fills the viewport on both portrait (mobile)
+// and landscape (desktop) without stretching.
 const BG_URL = './bg.jpg.jpeg';
 let bgPlane = null;
 
@@ -538,15 +611,32 @@ function buildSpaceEnvironment(){
   const texLoader = new THREE.TextureLoader();
   texLoader.load(BG_URL, (tex) => {
     tex.colorSpace = THREE.SRGBColorSpace;
-    // Compute plane size so the image fills the camera frustum at its
-    // z-depth, with ~20% overscan for parallax headroom.
     const bgZ = -1800;
     const vFov = THREE.MathUtils.degToRad(camera.fov);
     const visH = 2 * Math.abs(bgZ) * Math.tan(vFov / 2);
     const visW = visH * camera.aspect;
-    const overscan = 1.08;  // 8% extra on each side for parallax
-    const planeW = visW * overscan;
-    const planeH = visH * overscan;
+
+    // Image natural aspect ratio (landscape photo ~16:9)
+    const imgAspect = tex.image.width / tex.image.height;
+    const vpAspect = camera.aspect;
+
+    // "Cover" logic: the plane must fill the viewport in both dimensions,
+    // so whichever axis would leave letterbox bars gets scaled up.
+    let planeW, planeH;
+    if(vpAspect > imgAspect){
+      // Viewport is wider than image — match width, image taller than needed
+      planeW = visW;
+      planeH = visW / imgAspect;
+    } else {
+      // Viewport is taller than image (mobile portrait) — match height,
+      // image wider than needed
+      planeH = visH;
+      planeW = visH * imgAspect;
+    }
+    // Small overscan for parallax headroom
+    const overscan = 1.06;
+    planeW *= overscan;
+    planeH *= overscan;
 
     const geo = new THREE.PlaneGeometry(planeW, planeH);
     const mat = new THREE.MeshBasicMaterial({ map: tex });
@@ -1288,6 +1378,29 @@ snapBtn.addEventListener('click', ()=>{
   // mirrored pass -- it's already the same size/orientation as glCanvas.
   sctx.drawImage(faceCanvas, 0, 0, shot.width, shot.height);
   sctx.setTransform(1,0,0,1,0,0);
+
+  // Burn the text overlay into the capture so it shows in the saved image.
+  const tw = shot.width;
+  const th = shot.height;
+  const fontSize1 = Math.max(14, Math.round(tw * 0.028));
+  const fontSize2 = Math.max(16, Math.round(tw * 0.034));
+  const textY = th - Math.round(th * 0.12);
+
+  sctx.textAlign = 'center';
+  sctx.shadowColor = 'rgba(0,0,0,0.85)';
+  sctx.shadowBlur = 10;
+
+  // Line 1: anniversary
+  sctx.font = `700 ${fontSize1}px Orbitron, sans-serif`;
+  sctx.fillStyle = '#FF9933';
+  sctx.fillText('HAPPY 57TH ANNIVERSARY OF ISRO 🚀', tw/2, textY);
+
+  // Line 2: vyomnaut name
+  sctx.font = `400 ${fontSize2}px Outfit, sans-serif`;
+  sctx.fillStyle = '#ffffff';
+  sctx.fillText(`I am ${userName}, a Vyomnaut`, tw/2, textY + fontSize1 + 8);
+  sctx.shadowBlur = 0;
+
   const dataUrl = shot.toDataURL('image/png');
   thumbImg.src = dataUrl;
   thumb.style.display = 'block';
