@@ -854,6 +854,27 @@ function loadSuit(){
         armRestWorldDir[name] = new THREE.Vector3(0,1,0).applyQuaternion(q).normalize();
       }
 
+      // OVERRIDE the bind pose for arms so that they rest pointing downwards
+      // (like a relaxed A-pose) instead of floating back up into the default
+      // T-pose when tracking is lost. We process from parent to child so 
+      // the parent's world matrix is updated before pointing the child.
+      const armBonesDown = [
+        ['LeftArm', new THREE.Vector3(0.2, -1, 0.1)],
+        ['LeftForeArm', new THREE.Vector3(0, -1, 0)],
+        ['LeftHand', new THREE.Vector3(0, -1, 0)],
+        ['RightArm', new THREE.Vector3(-0.2, -1, 0.1)],
+        ['RightForeArm', new THREE.Vector3(0, -1, 0)],
+        ['RightHand', new THREE.Vector3(0, -1, 0)]
+      ];
+      for (const [name, targetWorldDir] of armBonesDown) {
+        const b = bones[name];
+        if (b && boneTwist[name] !== undefined) {
+          pointBoneTo(b, targetWorldDir.clone().normalize(), boneTwist[name]);
+          boneBindLocalQuat[name] = b.quaternion.clone();
+          b.updateWorldMatrix(true, false);
+        }
+      }
+
       maskGroup.add(root);
       for(const m of helmetMeshes) m.visible = !helmetRemoved;
       bonesReady = true;
