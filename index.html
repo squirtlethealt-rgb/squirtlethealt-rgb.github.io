@@ -660,8 +660,10 @@ async function loadTracking(){
   }catch(e){
     console.warn('pose tracking unavailable, suit will stay in bind pose', e);
     poseTrackingReady = false;
+  }
+  
   try{
-    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+    handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
       baseOptions: {
         modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
         delegate: "GPU"
