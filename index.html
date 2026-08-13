@@ -550,10 +550,14 @@ startBtn.addEventListener('click', ()=>{
 
 async function startCamera(){
   try{
-    const targetAR = window.innerWidth / window.innerHeight;
+    const isMobile = window.innerWidth < window.innerHeight;
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', aspectRatio: { ideal: targetAR }, width:{ideal:1280}, height:{ideal:1280/targetAR} },
-      audio:false
+      video: {
+        facingMode: 'user',
+        width: { ideal: isMobile ? 720 : 1280 },
+        height: { ideal: isMobile ? 1280 : 720 }
+      },
+      audio: false
     });
     video.srcObject = stream;
     await new Promise(res=> video.onloadedmetadata = res);
@@ -1440,7 +1444,13 @@ settingsBtn.addEventListener('click', openSheet);
 sheetBackdrop.addEventListener('click', closeSheet);
 
 window.addEventListener('resize', ()=>{
-  if(renderer && video.videoWidth) renderer.setSize(video.videoWidth, video.videoHeight, false);
+  if(renderer && video.videoWidth){
+    renderer.setSize(video.videoWidth, video.videoHeight, false);
+    if(camera){
+      camera.aspect = video.videoWidth / video.videoHeight;
+      camera.updateProjectionMatrix();
+    }
+  }
 });
 </script>
 </body>
