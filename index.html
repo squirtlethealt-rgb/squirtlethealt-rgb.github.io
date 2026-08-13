@@ -19,8 +19,14 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
   html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none;}
   .stage{position:fixed;inset:0;background:#000;touch-action:none;}
-  /* Camera feed is kept alive for tracking but never shown -- the visible
-     background is now the fully virtual scene rendered onto glCanvas. */
+
+  /* --- CSS background layer (behind everything) --- */
+  .bg-layer{position:absolute;inset:0;z-index:0;overflow:hidden;}
+  .bg-layer img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;animation:bgBreathe 12s ease-in-out infinite alternate;}
+  @keyframes bgBreathe{0%{transform:scale(1);}100%{transform:scale(1.04);}}
+  .bg-layer::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.65) 100%);pointer-events:none;z-index:1;}
+
+  /* Camera feed kept alive for tracking but invisible */
   video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;pointer-events:none;background:#000;}
   canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);pointer-events:none;}
   canvas.dots{z-index:3;}
@@ -99,6 +105,7 @@
 <body>
 
 <div class="stage" id="stage">
+  <div class="bg-layer" id="bgLayer"><img src="bg.jpg.jpeg" alt="" id="bgImg"></div>
   <video id="video" playsinline muted></video>
   <canvas class="gl" id="glCanvas"></canvas>
   <canvas id="faceCanvas"></canvas>
@@ -592,69 +599,18 @@ function initThree(){
   maskGroup.matrixAutoUpdate = false;
   scene.add(maskGroup);
 
-  buildSpaceEnvironment();
-}
-
-// Builds the virtual environment backdrop using the spacecraft interior
-// photograph (bg.jpg.jpeg) as a textured plane behind the suit. Uses
-// "cover" sizing so the image fills the viewport on both portrait (mobile)
-// and landscape (desktop) without stretching.
-const BG_URL = './bg.jpg.jpeg';
-let bgPlane = null;
-
-function buildSpaceEnvironment(){
+  // Background is now a CSS layer, no Three.js env geometry needed.
+  // Just make sure the scene itself is transparent so the CSS bg shows through.
   envGroup = new THREE.Group();
   envPanels = [];
-
-  scene.background = new THREE.Color(0x020308);
-
-  const texLoader = new THREE.TextureLoader();
-  texLoader.load(BG_URL, (tex) => {
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const bgZ = -1800;
-    const vFov = THREE.MathUtils.degToRad(camera.fov);
-    const visH = 2 * Math.abs(bgZ) * Math.tan(vFov / 2);
-    const visW = visH * camera.aspect;
-
-    // Image natural aspect ratio (landscape photo ~16:9)
-    const imgAspect = tex.image.width / tex.image.height;
-    const vpAspect = camera.aspect;
-
-    // "Cover" logic: the plane must fill the viewport in both dimensions,
-    // so whichever axis would leave letterbox bars gets scaled up.
-    let planeW, planeH;
-    if(vpAspect > imgAspect){
-      // Viewport is wider than image — match width, image taller than needed
-      planeW = visW;
-      planeH = visW / imgAspect;
-    } else {
-      // Viewport is taller than image (mobile portrait) — match height,
-      // image wider than needed
-      planeH = visH;
-      planeW = visH * imgAspect;
-    }
-    // Small overscan for parallax headroom
-    const overscan = 1.06;
-    planeW *= overscan;
-    planeH *= overscan;
-
-    const geo = new THREE.PlaneGeometry(planeW, planeH);
-    const mat = new THREE.MeshBasicMaterial({ map: tex });
-    bgPlane = new THREE.Mesh(geo, mat);
-    bgPlane.position.set(0, 0, bgZ);
-    envGroup.add(bgPlane);
-  });
-
   scene.add(envGroup);
 }
 
+// Background is now a CSS layer behind the canvas. No Three.js env needed.
+const bgLayer = document.getElementById('bgLayer');
+
 function updateEnvironment(timeSec){
-  if(!envGroup) return;
-  envGroup.visible = envEnabled;
-  if(!envEnabled) return;
-  // No procedural animation needed — the photograph is static. Parallax
-  // head-tracking is handled in updatePlacementAndPose() via envGroup
-  // rotation, same as before.
+  if(bgLayer) bgLayer.style.display = envEnabled ? '' : 'none';
 }
 
 async function loadTracking(){
@@ -1108,16 +1064,15 @@ function updatePlacementAndPose(){
 
     base.compose(facePos, yawOnlyQuat, new THREE.Vector3(1,1,1));
 
-    // Parallax: nudge the environment opposite the head's yaw/pitch, like
-    // looking around inside a cabin rather than a flat backdrop tracking
-    // the suit. Negative sign is intentional -- turning your head right
-    // should reveal more of what's to your left, not follow you.
-    if(envGroup){
-      const targetYaw = -faceEuler.y * PARALLAX_YAW;
-      const targetPitch = -faceEuler.x * PARALLAX_PITCH;
+    // Parallax: nudge the CSS background opposite the head's yaw/pitch.
+    // Translates the bg-layer image so turning your head reveals more of
+    // the background in that direction.
+    if(bgLayer && envEnabled){
+      const targetYaw = faceEuler.y * 18;   // px of shift per radian
+      const targetPitch = faceEuler.x * 12;
       smoothedEnvYaw += (targetYaw - smoothedEnvYaw) * PARALLAX_SMOOTH;
       smoothedEnvPitch += (targetPitch - smoothedEnvPitch) * PARALLAX_SMOOTH;
-      envGroup.rotation.set(smoothedEnvPitch, smoothedEnvYaw, 0);
+      bgLayer.style.transform = `translate(${smoothedEnvYaw}px, ${smoothedEnvPitch}px)`;
     }
   } else {
     base.compose(
