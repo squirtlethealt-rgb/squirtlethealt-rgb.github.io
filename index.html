@@ -435,6 +435,12 @@ const FINGER_CHAINS = [
 const LEG_BONES = new Set(['LeftUpLeg','LeftLeg','LeftFoot','RightUpLeg','RightLeg','RightFoot']);
 const POSE_VISIBILITY_MIN_LEG = 0.8;
 
+// Arms often suffer from false-positive detections near the edge of the frame
+// in selfie crops, leading to severe wiggling or collapsing. They get a stricter
+// visibility threshold like the legs do.
+const ARM_BONES = new Set(['LeftArm','LeftForeArm','LeftHand','RightArm','RightForeArm','RightHand']);
+const POSE_VISIBILITY_MIN_ARM = 0.75;
+
 // Bind-pose LOCAL rotation for every bone we ever pose (arms, legs,
 // fingers), cached once at load -- see loadSuit(). When a limb loses
 // confident tracking mid-session, we ease its bones back toward THIS
@@ -448,8 +454,8 @@ const RETURN_TO_BIND_RATE = 0.12;
 // gating decides WHETHER to trust a joint this frame, smoothing reduces
 // how much a trusted-but-noisy joint can jump frame to frame. Kept as
 // plain objects keyed by landmark index / hand label so it works for
-// both pose and hand landmark arrays.
-const POSE_LANDMARK_SMOOTH = 0.45;
+// both pose and hand landmark arrays. Lower = slower/smoother.
+const POSE_LANDMARK_SMOOTH = 0.2; // heavy smoothing to suppress arm wiggles
 const HAND_LANDMARK_SMOOTH = 0.45;
 let smoothedPoseWorldStore = null;
 let smoothedHandWorldStore = {};
@@ -926,8 +932,8 @@ function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks, armRestWo
   if(!bone || !armRestWorldDir) return;
   const p = worldLandmarks[shoulderIdx], c = worldLandmarks[elbowIdx];
   if(!p || !c) return;
-  if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN) ||
-     (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN)) return;
+  if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN_ARM) ||
+     (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN_ARM)) return;
   const liveDir = mpVec(c).sub(mpVec(p));
   if(liveDir.lengthSq() < 1e-8) return;
   liveDir.normalize();
@@ -988,7 +994,8 @@ function applyPoseToSkeleton(worldLandmarks){
     const bone = bones[boneName];
     if(!bone) continue;
     const isLeg = LEG_BONES.has(boneName);
-    const visMin = isLeg ? POSE_VISIBILITY_MIN_LEG : POSE_VISIBILITY_MIN;
+    const isArm = ARM_BONES.has(boneName);
+    const visMin = isLeg ? POSE_VISIBILITY_MIN_LEG : (isArm ? POSE_VISIBILITY_MIN_ARM : POSE_VISIBILITY_MIN);
     const p = worldLandmarks[pIdx], c = worldLandmarks[cIdx];
     const visible = p && c &&
       (p.visibility === undefined || p.visibility >= visMin) &&
