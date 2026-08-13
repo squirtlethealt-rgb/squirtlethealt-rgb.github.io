@@ -544,7 +544,7 @@ function buildSpaceEnvironment(){
     const vFov = THREE.MathUtils.degToRad(camera.fov);
     const visH = 2 * Math.abs(bgZ) * Math.tan(vFov / 2);
     const visW = visH * camera.aspect;
-    const overscan = 1.35;  // 35% extra on each side for parallax
+    const overscan = 1.08;  // 8% extra on each side for parallax
     const planeW = visW * overscan;
     const planeH = visH * overscan;
 
