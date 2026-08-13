@@ -201,9 +201,7 @@
     <input type="range" id="rTilt" min="-45" max="45" step="1" value="0">
   </div>
   <div class="toggle-row">
-    <button class="icon-btn active" id="poseRetargetBtn" aria-label="full body tracking">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v6l-3 7"/><path d="M12 13l3 7"/><path d="M8 10l4-1 4 1"/></svg>
-    </button>
+    <!-- Body tracking toggle removed; arms permanently resting -->
     <button class="icon-btn active" id="envBtn" aria-label="virtual environment">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
     </button>
@@ -668,28 +666,6 @@ async function loadTracking(){
     console.warn('pose tracking unavailable, suit will stay in bind pose', e);
     poseTrackingReady = false;
   }
-
-  try{
-    handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
-      baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-        delegate: "GPU"
-      },
-      runningMode: "VIDEO",
-      numHands: 2,
-      // Same reasoning as pose above -- the default 0.5 lets a hand-shaped
-      // patch of background (a fist-sized shadow, a sleeve fold) register
-      // as a detected hand for a stray frame, which is what reads as
-      // "vibrating" fingers when no hand is actually there.
-      minHandDetectionConfidence: 0.65,
-      minHandPresenceConfidence: 0.65,
-      minTrackingConfidence: 0.6
-    });
-    handTrackingReady = true;
-  }catch(e){
-    console.warn('hand tracking unavailable', e);
-    handTrackingReady = false;
-  }
 }
 
 function loadSuit(){
@@ -1013,74 +989,8 @@ function applyPoseToSkeleton(worldLandmarks){
   poseShoulder('LeftShoulder', SHOULDER_L, ELBOW_L, worldLandmarks, armRestWorldDir['LeftArm']);
   poseShoulder('RightShoulder', SHOULDER_R, ELBOW_R, worldLandmarks, armRestWorldDir['RightArm']);
 
-  const leftBend = armStraightness(worldLandmarks, SHOULDER_L, ELBOW_L, WRIST_L);
-  const rightBend = armStraightness(worldLandmarks, SHOULDER_R, ELBOW_R, WRIST_R);
-  for(const [boneName, pIdx, cIdx] of BONE_CHAINS){
-    const bone = bones[boneName];
-    if(!bone) continue;
-    const isLeg = LEG_BONES.has(boneName);
-    const isArm = ARM_BONES.has(boneName);
-    const visMin = isLeg ? POSE_VISIBILITY_MIN_LEG : (isArm ? POSE_VISIBILITY_MIN_ARM : POSE_VISIBILITY_MIN);
-    const p = worldLandmarks[pIdx], c = worldLandmarks[cIdx];
-    const visible = p && c &&
-      (p.visibility === undefined || p.visibility >= visMin) &&
-      (c.visibility === undefined || c.visibility >= visMin);
-
-    if(visible){
-      const dir = mpVec(c).sub(mpVec(p));
-      const liveLen = dir.length();
-      if(liveLen >= 1e-4){
-        pointBoneTo(bone, dir.clone().normalize(), boneTwist[boneName]);
-        if(ENABLE_ARM_STRETCH && STRETCH_BONES.has(boneName)){
-          const bendFactor = boneName === 'LeftArm' ? leftBend : rightBend;
-          applyBoneStretch(bone, boneName, liveLen, bendFactor);
-        }
-        continue;
-      }
-    }
-
-    // Not confidently tracked this frame (out of frame, occluded, or
-    // below this bone's confidence bar) -- ease back toward bind pose
-    // instead of freezing at the last estimate. This is what stops legs
-    // from getting stuck "folded" the moment the camera can't see them,
-    // and stops a single noisy frame anywhere from sticking around.
-    const bindQ = boneBindLocalQuat[boneName];
-    if(bindQ){
-      bone.quaternion.slerp(bindQ, RETURN_TO_BIND_RATE);
-      bone.updateWorldMatrix(true, false);
-      if(ENABLE_ARM_STRETCH && STRETCH_BONES.has(boneName)){
-        const prev = smoothedStretch[boneName];
-        const next = (prev === undefined) ? 1 : prev + (1 - prev) * RETURN_TO_BIND_RATE;
-        smoothedStretch[boneName] = next;
-        bone.scale.set(1, next, 1);
-      }
-    }
-  }
-}
-
-function applyFingersToSkeleton(handWorldByLabel){
-  for(const [boneName, pIdx, cIdx, label] of FINGER_CHAINS){
-    const bone = bones[boneName];
-    if(!bone) continue;
-    // Only ever drive fingers from a hand that's passed the debounced
-    // presence check (see loop()) -- a hand present in handWorldByLabel
-    // this single frame but not yet/no-longer confirmed is exactly the
-    // false-positive case that was causing fingers to vibrate.
-    const hand = handConfirmed[label] ? handWorldByLabel[label] : null;
-    const p = hand && hand[pIdx], c = hand && hand[cIdx];
-    if(p && c){
-      const dir = mpVecHand(c).sub(mpVecHand(p));
-      if(dir.lengthSq() >= 1e-8){
-        pointBoneTo(bone, dir.normalize(), boneTwist[boneName]);
-        continue;
-      }
-    }
-    const bindQ = boneBindLocalQuat[boneName];
-    if(bindQ){
-      bone.quaternion.slerp(bindQ, RETURN_TO_BIND_RATE);
-      bone.updateWorldMatrix(true, false);
-    }
-  }
+  // BONE_CHAINS loop (arms, legs) removed as requested. Arms now stay permanently
+  // in their downwards rest pose set in loadSuit, eliminating all wiggle/funny poses.
 }
 
 function updatePlacementAndPose(){
@@ -1176,9 +1086,6 @@ function updatePlacementAndPose(){
   if(poseRetargetEnabled && lastPoseWorldLandmarks && bonesReady){
     applyPoseToSkeleton(lastPoseWorldLandmarks);
   }
-  if(poseRetargetEnabled && bonesReady){
-    applyFingersToSkeleton(lastHandWorldByLabel);
-  }
 }
 
 async function loop(){
@@ -1198,42 +1105,6 @@ async function loop(){
     if(poseResults.worldLandmarks && poseResults.worldLandmarks.length){
       smoothedPoseWorldStore = smoothLandmarks(poseResults.worldLandmarks[0], smoothedPoseWorldStore, POSE_LANDMARK_SMOOTH);
       lastPoseWorldLandmarks = smoothedPoseWorldStore;
-    }
-  }
-  if(handTrackingReady && handLandmarker && video.readyState >= 2){
-    const handResults = handLandmarker.detectForVideo(video, now);
-    if(handResults.landmarks){
-      lastHandLandmarks = handResults.landmarks;
-    }
-    const seenThisFrame = { Left:false, Right:false };
-    if(handResults.worldLandmarks && handResults.handednesses){
-      const byLabel = {};
-      for(let i=0;i<handResults.worldLandmarks.length;i++){
-        const cat = handResults.handednesses[i] && handResults.handednesses[i][0];
-        if(cat && cat.categoryName){
-          const label = cat.categoryName;
-          smoothedHandWorldStore[label] = smoothLandmarks(handResults.worldLandmarks[i], smoothedHandWorldStore[label], HAND_LANDMARK_SMOOTH);
-          byLabel[label] = smoothedHandWorldStore[label];
-          seenThisFrame[label] = true;
-        }
-      }
-      lastHandWorldByLabel = byLabel;
-    }
-    // Debounce presence per hand -- see the constants above loadTracking()
-    // for why. A hand only counts as "confirmed" after several straight
-    // frames of detection, and only drops after several straight frames
-    // of absence, so one stray misdetection (or one stray miss on a real
-    // hand) can't flip fingers on/off and cause the vibrating look.
-    for(const label of ['Left','Right']){
-      if(seenThisFrame[label]){
-        handSeenStreak[label]++;
-        handMissStreak[label] = 0;
-        if(handSeenStreak[label] >= HAND_CONFIRM_FRAMES) handConfirmed[label] = true;
-      } else {
-        handMissStreak[label]++;
-        handSeenStreak[label] = 0;
-        if(handMissStreak[label] >= HAND_DROP_FRAMES) handConfirmed[label] = false;
-      }
     }
   }
 
@@ -1320,39 +1191,7 @@ function drawTrackingDots(){
       dotsCtx.arc(x, y, 4, 0, Math.PI*2);
       dotsCtx.fill();
     }
-    dotsCtx.strokeStyle = '#138808';
-    dotsCtx.lineWidth = 2;
-    const bonesToDraw = [[SHOULDER_L,SHOULDER_R],[SHOULDER_L,ELBOW_L],[ELBOW_L,WRIST_L],[WRIST_L,INDEX_L],[SHOULDER_R,ELBOW_R],[ELBOW_R,WRIST_R],[WRIST_R,INDEX_R],[HIP_L,HIP_R],[HIP_L,KNEE_L],[KNEE_L,ANKLE_L],[HIP_R,KNEE_R],[KNEE_R,ANKLE_R],[SHOULDER_L,HIP_L],[SHOULDER_R,HIP_R],[ANKLE_L,FOOT_INDEX_L],[ANKLE_R,FOOT_INDEX_R]];
-    for(const [a,b] of bonesToDraw){
-      const la = lastPoseLandmarks[a], lb = lastPoseLandmarks[b];
-      if(!la || !lb) continue;
-      if((la.visibility!==undefined && la.visibility<POSE_VISIBILITY_MIN) || (lb.visibility!==undefined && lb.visibility<POSE_VISIBILITY_MIN)) continue;
-      dotsCtx.beginPath();
-      dotsCtx.moveTo(la.x*dotsCanvas.width, la.y*dotsCanvas.height);
-      dotsCtx.lineTo(lb.x*dotsCanvas.width, lb.y*dotsCanvas.height);
-      dotsCtx.stroke();
-    }
-  }
-
-  if(lastHandLandmarks && lastHandLandmarks.length){
-    for(const hand of lastHandLandmarks){
-      dotsCtx.strokeStyle = '#FFFFFF';
-      dotsCtx.lineWidth = 1.5;
-      for(const [a,b] of HAND_CONNECTIONS){
-        const pa = hand[a], pb = hand[b];
-        if(!pa || !pb) continue;
-        dotsCtx.beginPath();
-        dotsCtx.moveTo(pa.x*dotsCanvas.width, pa.y*dotsCanvas.height);
-        dotsCtx.lineTo(pb.x*dotsCanvas.width, pb.y*dotsCanvas.height);
-        dotsCtx.stroke();
-      }
-      dotsCtx.fillStyle = '#0b1f6b';
-      for(const lm of hand){
-        dotsCtx.beginPath();
-        dotsCtx.arc(lm.x*dotsCanvas.width, lm.y*dotsCanvas.height, 2.5, 0, Math.PI*2);
-        dotsCtx.fill();
-      }
-    }
+    // Body tracking lines removed from UI since limbs are no longer tracked
   }
 }
 
