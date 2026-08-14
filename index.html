@@ -883,24 +883,14 @@ function loadSuit(){
         bones['RightArm'].updateWorldMatrix(true, false);
       }
 
-      // Set forearms to hang straight down from the elbows.
-      // Using direct Euler rotations (not pointBoneTo) so the rest pose
-      // is fully deterministic and can't produce backward twists.
-      if (bones['LeftForeArm']) {
-        bones['LeftForeArm'].rotation.set(0, 0, 0);
-        bones['LeftForeArm'].updateWorldMatrix(true, false);
-      }
-      if (bones['RightForeArm']) {
-        bones['RightForeArm'].rotation.set(0, 0, 0);
-        bones['RightForeArm'].updateWorldMatrix(true, false);
-      }
-      if (bones['LeftHand']) {
-        bones['LeftHand'].rotation.set(0, 0, 0);
-        bones['LeftHand'].updateWorldMatrix(true, false);
-      }
-      if (bones['RightHand']) {
-        bones['RightHand'].rotation.set(0, 0, 0);
-        bones['RightHand'].updateWorldMatrix(true, false);
+      // Forearms and hands DON'T need explicit rotation overrides.
+      // They're child bones of LeftArm/RightArm, so they naturally follow
+      // the parent's downward rotation. Their original bind-pose local
+      // rotations already encode the correct direction relative to parent.
+      // We just need to update the world matrices so the recomputation
+      // below sees the correct final transforms.
+      for (const name of ['LeftForeArm','LeftHand','RightForeArm','RightHand']) {
+        if (bones[name]) bones[name].updateWorldMatrix(true, false);
       }
 
       // Now recompute boneTwist, boneRestAxis, and boneBindLocalQuat for
