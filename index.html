@@ -865,12 +865,18 @@ function updatePlacementAndPose(){
       // visor opening on purpose -- the stencil mask (see loadSuit) clips
       // any overflow to the visor's exact silhouette, so this only needs
       // to be generous enough that no gap ever opens at the visor's edges
-      // as the head turns.
+      // as the head turns. FACE_CARD_WIDTH_BOOST widens it further on its
+      // own (independent of height) since the visor opening on this
+      // helmet reads noticeably wider than the plain aspect-ratio crop.
+      const FACE_CARD_WIDTH_BOOST = 1.7;
       const targetHeight = 0.30;
       const targetWidth = targetHeight * (ew / eh) * (video.videoWidth / video.videoHeight);
       
-      // Scale X and Z equally to maintain the circular curve of the cylinder!
-      faceCardMesh.scale.set(targetWidth, targetHeight, targetWidth);
+      // X is boosted wider than Z on purpose (see FACE_CARD_WIDTH_BOOST
+      // above) -- Z alone still sets how deep the cylinder's curve reads,
+      // so widening only X stretches the visible plane without flattening
+      // or over-curving it.
+      faceCardMesh.scale.set(targetWidth * FACE_CARD_WIDTH_BOOST, targetHeight, targetWidth);
     }
   }
 
