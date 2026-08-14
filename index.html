@@ -205,9 +205,6 @@
     <input type="range" id="rTilt" min="-45" max="45" step="1" value="0">
   </div>
   <div class="toggle-row">
-    <button class="icon-btn active" id="poseRetargetBtn" aria-label="forearm and hand tracking">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v6l-3 7"/><path d="M12 13l3 7"/><path d="M8 10l4-1 4 1"/></svg>
-    </button>
     <button class="icon-btn active" id="envBtn" aria-label="virtual environment">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
     </button>
@@ -223,7 +220,7 @@
 }
 </script>
 <script type="module">
-import { FaceLandmarker, PoseLandmarker, HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
@@ -318,28 +315,7 @@ let bones = null;
 let bonesReady = false;
 let restShoulderWidth = null;
 let smoothedScale = null;
-
-const BONE_CHAIN_NEXT = { 'LeftArm':'LeftForeArm', 'RightArm':'RightForeArm' };
-const STRETCH_BONES = new Set(Object.keys(BONE_CHAIN_NEXT));
-// Live-length arm stretching (scaling LeftArm/RightArm to match the
-// tracked shoulder-to-elbow distance) exists to compensate for depth
-// mismatches between the real body's proportions and the suit's rig --
-// useful when the suit needs to visually "fit" whatever's actually in
-// frame. With the visor open, the real suit's own proportions are what's
-// meant to show, so stretching it away from its authored shape reads as
-// wrong rather than helpful (and it was one more source of scale
-// mismatch at the shoulder/deltoid seam on top of the rotation gap
-// poseShoulder() already had to fix). Left the whole mechanism in place,
-// just switched off, in case a use case comes back where compensating
-// for a real body's proportions is wanted again.
-const ENABLE_ARM_STRETCH = false;
-let boneRestLength = {};
-let smoothedStretch = {};
-let shoulderBindLocalQuat = {}; // true bind-pose LOCAL rotation, cached once at load
-let armRestWorldDir = {}; // true bind-pose WORLD direction of shoulder->elbow per arm
-let boneTwist = {}; // { boneName: twist quaternion }, cached once at load
 let headBindLocalQuat = null; // bind-pose LOCAL rotation of the Head bone, cached once at load
-
 const MIN_LIVE_SHOULDER_M = 0.15;
 const MAX_LIVE_SHOULDER_M = 0.65;
 let manualOffset = {x:0, y:0};
@@ -347,161 +323,7 @@ let suitLoadFailed = false;
 const CHEEK_L = 234, CHEEK_R = 454;
 const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
 
-let poseLandmarker = null;
-let poseTrackingReady = false;
-let lastPoseLandmarks = null;
-let lastPoseWorldLandmarks = null;
-const SHOULDER_L = 11, SHOULDER_R = 12;
-const ELBOW_L = 13, ELBOW_R = 14;
-const WRIST_L = 15, WRIST_R = 16;
-const PINKY_L = 17, PINKY_R = 18;
-const INDEX_L = 19, INDEX_R = 20;
-const HIP_L = 23, HIP_R = 24;
-const KNEE_L = 25, KNEE_R = 26;
-const ANKLE_L = 27, ANKLE_R = 28;
-const FOOT_INDEX_L = 31, FOOT_INDEX_R = 32;
-const POSE_MARK_POINTS = [SHOULDER_L, SHOULDER_R, HIP_L, HIP_R, ELBOW_L, ELBOW_R, WRIST_L, WRIST_R, INDEX_L, INDEX_R, KNEE_L, KNEE_R, ANKLE_L, ANKLE_R, FOOT_INDEX_L, FOOT_INDEX_R];
-const POSE_VISIBILITY_MIN = 0.5;
-
-// SHOULDER_FOLLOW_FACTOR: how much of the arm's swing the clavicle
-// (LeftShoulder/RightShoulder) absorbs each frame. The rig's suit-fabric
-// mesh is heavily skin-weighted across BOTH the Shoulder and Arm bones
-// (confirmed by inspecting the GLB: ~650 verts on LeftShoulder, ~670 on
-// LeftArm). Previously only Arm/ForeArm/Hand/UpLeg/Leg/Foot were driven,
-// so Shoulder stayed frozen in bind pose while Arm swung freely -- at
-// full extension that's a huge transform gap between two bones sharing
-// the same blended vertices, which tears the mesh into the spiky
-// "candy wrapper" shapes seen at the deltoid/collar seam. Partially
-// rotating the shoulder toward the same direction closes that gap.
-// A single fixed factor (0 = old frozen behavior, 1 = shoulder fully
-// tracks and looks robotic) was originally tuned numerically against
-// seam-test.mjs only across the 0-90 degree "normal pose" range -- a
-// flat 0.5 was the value that minimized the WORSE of the two seam
-// mismatches (chest seam vs elbow-side seam) across THAT range. But a
-// fixed blend that's correct at rest is necessarily too conservative
-// right at the top of that range: raised-arm / shoulder-height poses
-// (confirmed by user screenshots showing chest-seam tearing with arms
-// out near shoulder height) need the shoulder absorbing noticeably more
-// of the swing than a resting arm does, or the still-large local gap
-// between Shoulder and Arm tears the shared skin weights just like the
-// frozen-shoulder case did. shoulderFollowFactor() ramps the blend up
-// as the live swing angle grows, instead of using one number for every
-// pose. First pass (0.5 -> 0.85, capped at 65 degrees) still left a
-// ~25-degree gap at a fully horizontal, shoulder-height arm (swing ~90
-// degrees) -- confirmed still tearing there -- so both the ramp's top end
-// and the cap below are pushed further out to close that remaining gap
-// for exactly the pose that was still failing.
-function shoulderFollowFactor(swingAngleDeg){
-  const t = THREE.MathUtils.clamp(swingAngleDeg / 90, 0, 1);
-  return THREE.MathUtils.lerp(0.5, 0.95, t);
-}
-// Hard ceiling on how far the clavicle itself is allowed to swing, in
-// degrees, no matter how extreme the tracked arm direction is. Raised
-// from 40 to 65 degrees, then to 85: a fully horizontal, shoulder-height
-// arm needs the clavicle able to reach ~85-90 degrees of swing for the
-// gap versus the arm bone to stay small; 65 was still capping well short
-// of that and freezing the shoulder exactly where it needed to keep
-// moving. Left just short of a full 90 so a genuinely overhead reach
-// still doesn't swing the chest seam open completely.
-const MAX_SHOULDER_SWING_DEG = 85;
-const MAX_SHOULDER_SWING_RAD = THREE.MathUtils.degToRad(MAX_SHOULDER_SWING_DEG);
-
-const BONE_CHAINS = [
-  // Upper arms and legs removed to keep armpits and lower body frozen
-  ['LeftForeArm', ELBOW_L, WRIST_L],
-  ['LeftHand', WRIST_L, INDEX_L],
-  ['RightForeArm', ELBOW_R, WRIST_R],
-  ['RightHand', WRIST_R, INDEX_R],
-];
-
-const INDEX_MCP = 5, INDEX_PIP = 6, INDEX_DIP = 7, INDEX_TIP = 8;
-const FINGER_CHAINS = [
-  ['LeftHandIndex1', INDEX_MCP, INDEX_PIP, 'Left'],
-  ['LeftHandIndex2', INDEX_PIP, INDEX_DIP, 'Left'],
-  ['LeftHandIndex3', INDEX_DIP, INDEX_TIP, 'Left'],
-  ['RightHandIndex1', INDEX_MCP, INDEX_PIP, 'Right'],
-  ['RightHandIndex2', INDEX_PIP, INDEX_DIP, 'Right'],
-  ['RightHandIndex3', INDEX_DIP, INDEX_TIP, 'Right'],
-];
-
-// Legs sit right at (or past) the bottom edge of frame in a typical
-// chest-up selfie crop -- see the uploaded screenshot. The model still
-// reports "visible" landmarks for them well above 0.5 confidence even
-// when it's essentially guessing, which is what was reading as legs
-// "folding" on their own. Legs get their own, stricter bar.
-const LEG_BONES = new Set(['LeftUpLeg','LeftLeg','LeftFoot','RightUpLeg','RightLeg','RightFoot']);
-const POSE_VISIBILITY_MIN_LEG = 0.8;
-
-// Arms often suffer from false-positive detections near the edge of the frame
-// in selfie crops, leading to severe wiggling or collapsing. They get a stricter
-// visibility threshold like the legs do.
-const ARM_BONES = new Set(['LeftArm','LeftForeArm','LeftHand','RightArm','RightForeArm','RightHand']);
-const POSE_VISIBILITY_MIN_ARM = 0.85;
-
-// Bind-pose LOCAL rotation for every bone we ever pose (arms, legs,
-// fingers), cached once at load -- see loadSuit(). When a limb loses
-// confident tracking mid-session, we ease its bones back toward THIS
-// instead of freezing at the last (possibly bad) live estimate, so a
-// single noisy frame can't leave a knee or finger stuck bent.
-let boneBindLocalQuat = {};
-let boneRestAxis = {};
-const RETURN_TO_BIND_RATE = 0.12;
-
-// Exponential smoothing on raw landmark positions before they ever reach
-// bone math. This is separate from the visibility/confidence gating --
-// gating decides WHETHER to trust a joint this frame, smoothing reduces
-// how much a trusted-but-noisy joint can jump frame to frame. Kept as
-// plain objects keyed by landmark index / hand label so it works for
-// both pose and hand landmark arrays. Lower = slower/smoother.
-const POSE_LANDMARK_SMOOTH = 0.2; // heavy smoothing to suppress arm wiggles
-const HAND_LANDMARK_SMOOTH = 0.45;
-let smoothedPoseWorldStore = null;
-let smoothedHandWorldStore = {};
-
-function smoothLandmarks(raw, store, alpha){
-  if(!raw) return null;
-  if(!store){
-    store = raw.map(p => p ? { x:p.x, y:p.y, z:p.z, visibility:p.visibility } : null);
-    return store;
-  }
-  for(let i=0;i<raw.length;i++){
-    const r = raw[i];
-    if(!r) continue;
-    let s = store[i];
-    if(!s){ store[i] = { x:r.x, y:r.y, z:r.z, visibility:r.visibility }; continue; }
-    s.x += (r.x - s.x) * alpha;
-    s.y += (r.y - s.y) * alpha;
-    s.z += (r.z - s.z) * alpha;
-    // Visibility is copied raw, not smoothed -- a real loss of tracking
-    // needs to be detected immediately, not eased into.
-    s.visibility = r.visibility;
-  }
-  return store;
-}
-
-// Debounced hand presence: a hand must be seen for HAND_CONFIRM_FRAMES
-// straight frames before we trust it's really there, and must be missing
-// for HAND_DROP_FRAMES straight frames before we consider it gone. This
-// is what stops a single stray misdetection (no real hand in view) from
-// ever reaching the finger bones as a sudden pose.
-const HAND_CONFIRM_FRAMES = 4;
-const HAND_DROP_FRAMES = 6;
-let handSeenStreak = { Left:0, Right:0 };
-let handMissStreak = { Left:0, Right:0 };
-let handConfirmed = { Left:false, Right:false };
-
-let handLandmarker = null;
-let handTrackingReady = false;
-let lastHandLandmarks = [];
-let lastHandWorldByLabel = {};
-const HAND_CONNECTIONS = [
-  [0,1],[1,2],[2,3],[3,4],
-  [0,5],[5,6],[6,7],[7,8],
-  [5,9],[9,10],[10,11],[11,12],
-  [9,13],[13,14],[14,15],[15,16],
-  [13,17],[17,18],[18,19],[19,20],
-  [0,17]
-];
+// Tracking variables removed for procedural animations
 let dragging = false, dragStart = {x:0,y:0};
 let cameraStarted = false;
 let userName = '';
@@ -644,46 +466,7 @@ async function loadTracking(){
     return;
   }
 
-  try{
-    poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
-      baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-        delegate: "GPU"
-      },
-      runningMode: "VIDEO",
-      numPoses: 1,
-      // Defaults (0.5) are loose enough that a joint sitting just outside
-      // frame -- legs, in a typical chest-up selfie crop -- still gets
-      // reported as "tracked" with a guessed, unstable position instead
-      // of being flagged low-confidence. Raising these makes the model
-      // itself reject more of that guesswork before it ever reaches us.
-      minPoseDetectionConfidence: 0.6,
-      minPosePresenceConfidence: 0.6,
-      minTrackingConfidence: 0.6
-    });
-    poseTrackingReady = true;
-  }catch(e){
-    console.warn('pose tracking unavailable, suit will stay in bind pose', e);
-    poseTrackingReady = false;
-  }
-  
-  try{
-    handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
-      baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-        delegate: "GPU"
-      },
-      runningMode: "VIDEO",
-      numHands: 2,
-      minHandDetectionConfidence: 0.65,
-      minHandPresenceConfidence: 0.65,
-      minTrackingConfidence: 0.6
-    });
-    handTrackingReady = true;
-  }catch(e){
-    console.warn('hand tracking unavailable', e);
-    handTrackingReady = false;
-  }
+
 }
 
 function loadSuit(){
@@ -781,79 +564,12 @@ function loadSuit(){
       root.position.sub(headPos);
       root.updateMatrixWorld(true);
 
-      const lp = new THREE.Vector3(), rp = new THREE.Vector3();
-      bones['LeftArm'].getWorldPosition(lp);
-      bones['RightArm'].getWorldPosition(rp);
-      restShoulderWidth = lp.distanceTo(rp) || 0.3;
-
-      boneRestLength = {};
-      for(const [name, childName] of Object.entries(BONE_CHAIN_NEXT)){
-        const b = bones[name], cb = bones[childName];
-        if(!b || !cb) continue;
-        const bp = new THREE.Vector3(), cp = new THREE.Vector3();
-        b.getWorldPosition(bp);
-        cb.getWorldPosition(cp);
-        boneRestLength[name] = bp.distanceTo(cp) || 0.01;
-      }
-
-      // Cache bind-pose TWIST for every bone pointBoneTo() will ever pose
-      // (all BONE_CHAINS + FINGER_CHAINS entries) -- see computeSwingTwist().
-      // Also cache each bone's raw bind-pose LOCAL rotation itself
-      // (boneBindLocalQuat) -- used to ease a limb back to neutral when
-      // tracking for it drops out, see applyPoseToSkeleton/applyFingersToSkeleton.
-      boneTwist = {};
-      boneBindLocalQuat = {};
-      const posedBoneNames = new Set([
-        ...BONE_CHAINS.map(c=>c[0]),
-        ...FINGER_CHAINS.map(c=>c[0]),
-      ]);
-      for(const name of posedBoneNames){
-        const b = bones[name];
-        if(!b) continue;
-        
-        let restAxis = new THREE.Vector3(0,1,0);
-        const cb = b.children.find(c => c.isBone);
-        if (cb && cb.position.lengthSq() > 1e-8) {
-          restAxis = cb.position.clone().normalize();
-        }
-        boneRestAxis[name] = restAxis;
-
-        boneTwist[name] = computeSwingTwist(b.quaternion.clone(), restAxis);
-        boneBindLocalQuat[name] = b.quaternion.clone();
-      }
-
-      // Cache the TRUE bind-pose LOCAL rotation for the shoulder bones,
-      // right now before poseShoulder() ever touches them. poseShoulder()
-      // used to read the bone's current quaternion each frame and treat it
-      // as "rest" -- but after frame 1 that's already last frame's rotated
-      // result, not bind pose, so "rest" silently drifted every frame
-      // instead of staying fixed. This is what caused tearing even with
-      // arms relaxed, not just at extreme reach.
-      shoulderBindLocalQuat = {};
-      for(const name of ['LeftShoulder','RightShoulder']){
-        const b = bones[name];
-        if(b) shoulderBindLocalQuat[name] = b.quaternion.clone();
-      }
-
-      // Cache the Head bone's bind-pose LOCAL rotation too. Needed by the
+      // Cache the Head bone's bind-pose LOCAL rotation. Needed by the
       // root-rotation split in updatePlacementAndPose(): the face-tracked
       // pitch/roll (nodding, tilting) is applied ONLY to this bone, on top
       // of its own bind pose, instead of to the whole root/body.
       if(bones['Head']){
         headBindLocalQuat = bones['Head'].quaternion.clone();
-      }
-
-      // True bind-pose world direction of shoulder->elbow for each arm,
-      // needed by poseShoulder() to measure the ARM's real swing angle
-      // (as opposed to comparing against the shoulder's own unrelated
-      // clavicle axis, which was the earlier bug).
-      armRestWorldDir = {};
-      for(const name of ['LeftArm','RightArm']){
-        const b = bones[name];
-        if(!b) continue;
-        const q = new THREE.Quaternion();
-        b.getWorldQuaternion(q);
-        armRestWorldDir[name] = new THREE.Vector3(0,1,0).applyQuaternion(q).normalize();
       }
 
       // Hardcode a relaxed A-pose by applying explicit local rotations to the shoulders and arms.
@@ -883,32 +599,12 @@ function loadSuit(){
         bones['RightArm'].updateWorldMatrix(true, false);
       }
 
-      // Forearms and hands DON'T need explicit rotation overrides.
-      // They're child bones of LeftArm/RightArm, so they naturally follow
-      // the parent's downward rotation. Their original bind-pose local
-      // rotations already encode the correct direction relative to parent.
-      // We just need to update the world matrices so the recomputation
-      // below sees the correct final transforms.
-      for (const name of ['LeftForeArm','LeftHand','RightForeArm','RightHand']) {
-        if (bones[name]) bones[name].updateWorldMatrix(true, false);
-      }
-
-      // Now recompute boneTwist, boneRestAxis, and boneBindLocalQuat for
-      // ALL tracked arm bones from their FINAL posed state. This ensures
-      // the IK solver (pointBoneTo) uses values consistent with the actual
-      // rest pose, not the stale T-pose values computed earlier.
-      const allTrackedArmBones = ['LeftArm','LeftForeArm','LeftHand','RightArm','RightForeArm','RightHand'];
-      for (const name of allTrackedArmBones) {
-        const b = bones[name];
-        if (!b) continue;
-        let restAxis = new THREE.Vector3(0,1,0);
-        const cb = b.children.find(c => c.isBone);
-        if (cb && cb.position.lengthSq() > 1e-8) {
-          restAxis = cb.position.clone().normalize();
+      // Cache the base rotations after setting the A-pose so the procedural animation
+      // can oscillate around them.
+      for (const name of ['LeftShoulder','RightShoulder','LeftArm','RightArm','LeftForeArm','RightForeArm','LeftHand','RightHand']) {
+        if (bones[name]) {
+          bones[name].userData.baseQuat = bones[name].quaternion.clone();
         }
-        boneRestAxis[name] = restAxis;
-        boneTwist[name] = computeSwingTwist(b.quaternion.clone(), restAxis);
-        boneBindLocalQuat[name] = b.quaternion.clone();
       }
 
       maskGroup.add(root);
@@ -938,177 +634,68 @@ function enableDragFallback(){
   window.addEventListener('pointerup', ()=> dragging = false);
 }
 
-function mpVec(lm){
-  return new THREE.Vector3(lm.x*POSE_X_SIGN, lm.y*POSE_Y_SIGN, lm.z*POSE_Z_SIGN);
-}
+function updateZeroGAnimation(timeSec) {
+  if (!bonesReady) return;
 
-function mpVecHand(lm){
-  return new THREE.Vector3(lm.x*HAND_X_SIGN, lm.y*HAND_Y_SIGN, lm.z*HAND_Z_SIGN);
-}
-
-const _tmpQ = new THREE.Quaternion();
-const RESTY = new THREE.Vector3(0,1,0);
-
-function pointBoneTo(bone, targetWorldDir, twistQuat, restAxis = RESTY){
-  bone.parent.updateWorldMatrix(true, false);
-  bone.parent.getWorldQuaternion(_tmpQ);
-  _tmpQ.invert();
-  const localDir = targetWorldDir.clone().applyQuaternion(_tmpQ);
-  if(localDir.lengthSq() < 1e-8) return;
-  localDir.normalize();
-  const swing = new THREE.Quaternion().setFromUnitVectors(restAxis, localDir);
-  // Recompose with this bone's ORIGINAL bind-pose twist instead of
-  // discarding it. setFromUnitVectors alone always returns the
-  // shortest-arc rotation with zero twist around the target axis --
-  // proven with a standalone numeric test (seam-test.mjs) to silently
-  // erase ~40 degrees of this rig's baked-in bind-pose roll on the arm
-  // alone, EVEN AT REST, before any live tracking motion at all. That was
-  // a bigger, rig-wide source of distortion (every BONE_CHAINS bone, not
-  // just the shoulder) than any of the shoulder-specific tuning.
-  bone.quaternion.copy(twistQuat ? swing.clone().multiply(twistQuat) : swing);
-  bone.updateWorldMatrix(true, false);
-}
-
-// Decomposes a bone's true bind-pose LOCAL quaternion into swing (aim
-// toward its child) + twist (roll around that aim axis). Only the twist
-// part needs to be cached and reapplied every frame -- see pointBoneTo().
-function computeSwingTwist(bindLocalQuat, restAxis = RESTY){
-  const bindDir = restAxis.clone().applyQuaternion(bindLocalQuat).normalize();
-  const swing = new THREE.Quaternion().setFromUnitVectors(restAxis, bindDir);
-  return swing.clone().invert().multiply(bindLocalQuat);
-}
-
-// Partially rotates a clavicle bone (LeftShoulder/RightShoulder) toward the
-// same shoulder->elbow direction driving the arm below it, blended with its
-// own bind-pose direction by SHOULDER_FOLLOW_FACTOR. Must run BEFORE the
-// BONE_CHAINS loop poses 'LeftArm'/'RightArm': pointBoneTo() recomputes each
-// bone's local rotation from its parent's CURRENT world matrix, so once the
-// shoulder is partially rotated here, the arm's own pointBoneTo call
-// automatically needs a smaller local rotation to reach the same live
-// elbow direction -- the two bones share the swing instead of the shoulder
-// staying frozen while the arm does all of it (which is what was tearing
-// the skin-weight blend at the deltoid/collar seam).
-function poseShoulder(boneName, shoulderIdx, elbowIdx, worldLandmarks, armRestWorldDir){
-  const bone = bones[boneName];
-  if(!bone || !armRestWorldDir) return;
-  const p = worldLandmarks[shoulderIdx], c = worldLandmarks[elbowIdx];
-  if(!p || !c) return;
-  if((p.visibility !== undefined && p.visibility < POSE_VISIBILITY_MIN_ARM) ||
-     (c.visibility !== undefined && c.visibility < POSE_VISIBILITY_MIN_ARM)) return;
-  const liveDir = mpVec(c).sub(mpVec(p));
-  if(liveDir.lengthSq() < 1e-8) return;
-  liveDir.normalize();
-
-  const bindLocal = shoulderBindLocalQuat[boneName];
-  if(!bindLocal) return;
-
-  const swingQuat = new THREE.Quaternion().setFromUnitVectors(armRestWorldDir, liveDir);
-  const swingAngle = 2 * Math.acos(THREE.MathUtils.clamp(Math.abs(swingQuat.w), -1, 1));
-  if(swingAngle < 1e-4) return;
-
-  const followFactor = shoulderFollowFactor(THREE.MathUtils.radToDeg(swingAngle));
-  const desiredAngle = Math.min(swingAngle * followFactor, MAX_SHOULDER_SWING_RAD);
-  const t = desiredAngle / swingAngle;
-  const identity = new THREE.Quaternion();
-  const partialSwing = identity.clone().slerp(swingQuat, t);
-
-  bone.parent.updateWorldMatrix(true, false);
-  const parentWorldQuat = new THREE.Quaternion();
-  bone.parent.getWorldQuaternion(parentWorldQuat);
-  const bindWorldQuat = parentWorldQuat.clone().multiply(bindLocal);
-  const newWorldQuat = partialSwing.clone().multiply(bindWorldQuat);
-  const invParent = parentWorldQuat.clone().invert();
-  bone.quaternion.copy(invParent.multiply(newWorldQuat));
-  bone.updateWorldMatrix(true, false);
-}
-
-function armStraightness(worldLandmarks, shoulderIdx, elbowIdx, wristIdx){
-  const s = worldLandmarks[shoulderIdx], e = worldLandmarks[elbowIdx], w = worldLandmarks[wristIdx];
-  if(!s || !e || !w) return 1;
-  const upper = mpVec(e).sub(mpVec(s));
-  const lower = mpVec(w).sub(mpVec(e));
-  if(upper.lengthSq() < 1e-8 || lower.lengthSq() < 1e-8) return 1;
-  upper.normalize(); lower.normalize();
-  return THREE.MathUtils.clamp(upper.dot(lower), 0, 1);
-}
-
-function applyBoneStretch(bone, boneName, liveLen, bendFactor){
-  const restLen = boneRestLength[boneName];
-  if(!restLen) return;
-  const globalScale = smoothedScale || 1;
-  const rawTarget = THREE.MathUtils.clamp((liveLen / restLen) / globalScale, 0.85, 1.35);
-  const targetStretch = 1 + (rawTarget - 1) * bendFactor;
-  const prev = smoothedStretch[boneName];
-  const next = (prev === undefined) ? targetStretch : prev + (targetStretch - prev) * 0.12;
-  smoothedStretch[boneName] = next;
-  bone.scale.set(1, next, 1);
-}
-
-function applyPoseToSkeleton(worldLandmarks){
-  // Shoulders and upper arms remain frozen as requested.
-  // BONE_CHAINS now only contains forearms and hands.
-  for(const [boneName, pIdx, cIdx] of BONE_CHAINS){
-    const bone = bones[boneName];
-    if(!bone) continue;
-    
-    const p = worldLandmarks && worldLandmarks[pIdx];
-    const c = worldLandmarks && worldLandmarks[cIdx];
-    const visible = p && c &&
-      (p.visibility === undefined || p.visibility >= POSE_VISIBILITY_MIN_ARM) &&
-      (c.visibility === undefined || c.visibility >= POSE_VISIBILITY_MIN_ARM);
-
-    // Screen-space gate: only trust forearm tracking when the corresponding
-    // elbow AND wrist are clearly within the camera frame (not hanging off
-    // the bottom edge where MediaPipe guesses wildly inaccurate Z-depth,
-    // causing backward-twisted arms). We check the 2D screen landmarks
-    // (lastPoseLandmarks) -- if either point is below 90% of frame height
-    // or outside the horizontal frame, reject the data and ease to rest.
-    let screenOk = false;
-    if(visible && lastPoseLandmarks){
-      const sp = lastPoseLandmarks[pIdx];
-      const sc = lastPoseLandmarks[cIdx];
-      if(sp && sc){
-        const inFrame = sp.x > 0.02 && sp.x < 0.98 && sp.y > 0.02 && sp.y < 0.90
-                     && sc.x > 0.02 && sc.x < 0.98 && sc.y > 0.02 && sc.y < 0.90;
-        screenOk = inFrame;
-      }
-    }
-
-    if(visible && screenOk){
-      const dir = mpVec(c).sub(mpVec(p));
-      const liveLen = dir.length();
-      if(liveLen >= 1e-4){
-        pointBoneTo(bone, dir.clone().normalize(), boneTwist[boneName], boneRestAxis[boneName]);
-        continue;
-      }
-    }
-
-    const bindQ = boneBindLocalQuat[boneName];
-    if(bindQ){
-      bone.quaternion.slerp(bindQ, RETURN_TO_BIND_RATE);
-      bone.updateWorldMatrix(true, false);
-    }
+  // Gentle full-body bob (very subtle translation)
+  if (bones['Hips']) {
+    bones['Hips'].position.y = Math.sin(timeSec * 1.5) * 0.015; 
   }
-}
 
-function applyFingersToSkeleton(handWorldByLabel){
-  for(const [boneName, pIdx, cIdx, label] of FINGER_CHAINS){
-    const bone = bones[boneName];
-    if(!bone) continue;
-    const hand = handWorldByLabel && handConfirmed[label] ? handWorldByLabel[label] : null;
-    const p = hand && hand[pIdx], c = hand && hand[cIdx];
-    if(p && c){
-      const dir = mpVecHand(c).sub(mpVecHand(p));
-      if(dir.lengthSq() >= 1e-8){
-        pointBoneTo(bone, dir.normalize(), boneTwist[boneName], boneRestAxis[boneName]);
-        continue;
-      }
-    }
-    const bindQ = boneBindLocalQuat[boneName];
-    if(bindQ){
-      bone.quaternion.slerp(bindQ, RETURN_TO_BIND_RATE);
-      bone.updateWorldMatrix(true, false);
-    }
+  // Left Arm Float
+  if (bones['LeftArm'] && bones['LeftArm'].userData.baseQuat) {
+    const q = bones['LeftArm'].userData.baseQuat.clone();
+    const swingZ = Math.sin(timeSec * 1.2) * 0.08;
+    const swingX = Math.cos(timeSec * 0.9) * 0.05;
+    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(swingX, 0, swingZ)));
+    bones['LeftArm'].quaternion.copy(q);
+    bones['LeftArm'].updateWorldMatrix(true, false);
+  }
+
+  // Left ForeArm (bend)
+  if (bones['LeftForeArm'] && bones['LeftForeArm'].userData.baseQuat) {
+    const q = bones['LeftForeArm'].userData.baseQuat.clone();
+    const bend = (Math.sin(timeSec * 1.5 + 1) * 0.5 + 0.5) * 0.15; // 0 to 0.15 rad
+    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bend, 0)));
+    bones['LeftForeArm'].quaternion.copy(q);
+    bones['LeftForeArm'].updateWorldMatrix(true, false);
+  }
+
+  // Left Hand (wrist float)
+  if (bones['LeftHand'] && bones['LeftHand'].userData.baseQuat) {
+    const q = bones['LeftHand'].userData.baseQuat.clone();
+    const wristRoll = Math.sin(timeSec * 2.1) * 0.1;
+    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(wristRoll, 0, 0)));
+    bones['LeftHand'].quaternion.copy(q);
+    bones['LeftHand'].updateWorldMatrix(true, false);
+  }
+
+  // Right Arm Float (offset phase)
+  if (bones['RightArm'] && bones['RightArm'].userData.baseQuat) {
+    const q = bones['RightArm'].userData.baseQuat.clone();
+    const swingZ = Math.sin(timeSec * 1.3 + Math.PI) * 0.08; 
+    const swingX = Math.cos(timeSec * 1.0 + Math.PI) * 0.05;
+    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(swingX, 0, swingZ)));
+    bones['RightArm'].quaternion.copy(q);
+    bones['RightArm'].updateWorldMatrix(true, false);
+  }
+
+  // Right ForeArm (bend)
+  if (bones['RightForeArm'] && bones['RightForeArm'].userData.baseQuat) {
+    const q = bones['RightForeArm'].userData.baseQuat.clone();
+    const bend = (Math.sin(timeSec * 1.4 + 2) * 0.5 + 0.5) * 0.15;
+    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -bend, 0)));
+    bones['RightForeArm'].quaternion.copy(q);
+    bones['RightForeArm'].updateWorldMatrix(true, false);
+  }
+
+  // Right Hand (wrist float)
+  if (bones['RightHand'] && bones['RightHand'].userData.baseQuat) {
+    const q = bones['RightHand'].userData.baseQuat.clone();
+    const wristRoll = Math.sin(timeSec * 2.0 + 1) * 0.1;
+    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-wristRoll, 0, 0)));
+    bones['RightHand'].quaternion.copy(q);
+    bones['RightHand'].updateWorldMatrix(true, false);
   }
 }
 
@@ -1152,19 +739,7 @@ function updatePlacementAndPose(){
     );
   }
 
-  let haveLiveScale = false;
-  if(lastPoseWorldLandmarks && restShoulderWidth){
-    const l = lastPoseWorldLandmarks[SHOULDER_L], r = lastPoseWorldLandmarks[SHOULDER_R];
-    if(l && r && (l.visibility===undefined || l.visibility>=POSE_VISIBILITY_MIN) && (r.visibility===undefined || r.visibility>=POSE_VISIBILITY_MIN)){
-      const liveShoulderWidth = mpVec(l).distanceTo(mpVec(r));
-      if(liveShoulderWidth >= MIN_LIVE_SHOULDER_M && liveShoulderWidth <= MAX_LIVE_SHOULDER_M){
-        const targetScale = (liveShoulderWidth / restShoulderWidth) * SCALE_BOOST;
-        smoothedScale = (smoothedScale === null) ? targetScale : smoothedScale + (targetScale - smoothedScale) * 0.15;
-        haveLiveScale = true;
-      }
-    }
-  }
-  statusDot.className = haveLiveScale ? 'status-dot locked' : 'status-dot fitting';
+  statusDot.className = trackingReady && lastMatrixData ? 'status-dot locked' : 'status-dot fitting';
 
   const finalScale = (smoothedScale !== null ? smoothedScale : SCALE_BOOST) * fine * METERS_TO_SCENE_UNITS;
   const flipYaw = flip180 ? Math.PI : 0;
@@ -1202,11 +777,7 @@ function updatePlacementAndPose(){
     bones['Head'].updateWorldMatrix(true, false);
   }
 
-  if(poseRetargetEnabled && bonesReady){
-    applyPoseToSkeleton(lastPoseWorldLandmarks);
-    applyFingersToSkeleton(lastHandWorldByLabel);
-  }
-}
+  updateZeroGAnimation(performance.now() / 1000);
 
 async function loop(){
   const now = performance.now();
@@ -1217,69 +788,6 @@ async function loop(){
       lastFaceLandmarks = (results.faceLandmarks && results.faceLandmarks[0]) || lastFaceLandmarks;
     }
   }
-  if(poseTrackingReady && poseLandmarker && video.readyState >= 2){
-    const poseResults = poseLandmarker.detectForVideo(video, now);
-    if(poseResults.landmarks && poseResults.landmarks.length){
-      lastPoseLandmarks = poseResults.landmarks[0];
-    } else {
-      lastPoseLandmarks = null;
-    }
-    if(poseResults.worldLandmarks && poseResults.worldLandmarks.length){
-      smoothedPoseWorldStore = smoothLandmarks(poseResults.worldLandmarks[0], smoothedPoseWorldStore, POSE_LANDMARK_SMOOTH);
-      lastPoseWorldLandmarks = smoothedPoseWorldStore;
-    } else {
-      lastPoseWorldLandmarks = null;
-    }
-  }
-
-  if(handTrackingReady && handLandmarker && video.readyState >= 2){
-    const handResults = handLandmarker.detectForVideo(video, now);
-    const seenThisFrame = { Left:false, Right:false };
-    const validHandLandmarks = [];
-    if(handResults.worldLandmarks && handResults.handednesses){
-      const byLabel = {};
-      for(let i=0;i<handResults.worldLandmarks.length;i++){
-        const cat = handResults.handednesses[i] && handResults.handednesses[i][0];
-        if(cat && cat.categoryName){
-          const label = cat.categoryName;
-          
-          // Verify this hand actually belongs to the tracked body by checking 
-          // the distance from the hand root to the pose wrist landmark.
-          if (lastPoseLandmarks) {
-            const wristIdx = label === 'Left' ? WRIST_L : WRIST_R;
-            const poseWrist = lastPoseLandmarks[wristIdx];
-            const handRoot = handResults.landmarks[i][0];
-            if (poseWrist && (poseWrist.visibility === undefined || poseWrist.visibility >= POSE_VISIBILITY_MIN_ARM) && handRoot) {
-              const dx = poseWrist.x - handRoot.x;
-              const dy = poseWrist.y - handRoot.y;
-              // If hand is further than 20% of screen space from the tracked wrist, it's likely a background person
-              if (dx*dx + dy*dy > 0.04) continue; 
-            }
-          }
-          
-          validHandLandmarks.push(handResults.landmarks[i]);
-          smoothedHandWorldStore[label] = smoothLandmarks(handResults.worldLandmarks[i], smoothedHandWorldStore[label], HAND_LANDMARK_SMOOTH);
-          byLabel[label] = smoothedHandWorldStore[label];
-          seenThisFrame[label] = true;
-        }
-      }
-      lastHandWorldByLabel = byLabel;
-    }
-    lastHandLandmarks = validHandLandmarks;
-    for(const label of ['Left','Right']){
-      if(seenThisFrame[label]){
-        handSeenStreak[label]++;
-        handMissStreak[label] = 0;
-        if(handSeenStreak[label] >= HAND_CONFIRM_FRAMES) handConfirmed[label] = true;
-      } else {
-        handMissStreak[label]++;
-        handSeenStreak[label] = 0;
-        if(handMissStreak[label] >= HAND_DROP_FRAMES) handConfirmed[label] = false;
-      }
-    }
-  }
-
-  drawTrackingDots();
   updateEnvironment(now / 1000);
 
   if(maskGroup && bonesReady){
@@ -1348,55 +856,6 @@ function drawTrackingDots(){
       dotsCtx.arc(x, y, 3, 0, Math.PI*2);
       dotsCtx.fill();
     }
-  }
-
-  if(lastPoseLandmarks){
-    dotsCtx.fillStyle = '#138808';
-    for(const idx of POSE_MARK_POINTS){
-      const lm = lastPoseLandmarks[idx];
-      if(!lm) continue;
-      if(lm.visibility !== undefined && lm.visibility < POSE_VISIBILITY_MIN) continue;
-      const x = lm.x * dotsCanvas.width;
-      const y = lm.y * dotsCanvas.height;
-      dotsCtx.beginPath();
-      dotsCtx.arc(x, y, 4, 0, Math.PI*2);
-      dotsCtx.fill();
-    }
-    
-    dotsCtx.strokeStyle = '#138808';
-    dotsCtx.lineWidth = 2;
-    const bonesToDraw = [[ELBOW_L,WRIST_L],[WRIST_L,INDEX_L],[ELBOW_R,WRIST_R],[WRIST_R,INDEX_R]];
-    for(const [a,b] of bonesToDraw){
-      const la = lastPoseLandmarks[a], lb = lastPoseLandmarks[b];
-      if(!la || !lb) continue;
-      if((la.visibility!==undefined && la.visibility<POSE_VISIBILITY_MIN_ARM) || (lb.visibility!==undefined && lb.visibility<POSE_VISIBILITY_MIN_ARM)) continue;
-      dotsCtx.beginPath();
-      dotsCtx.moveTo(la.x*dotsCanvas.width, la.y*dotsCanvas.height);
-      dotsCtx.lineTo(lb.x*dotsCanvas.width, lb.y*dotsCanvas.height);
-      dotsCtx.stroke();
-    }
-  }
-
-  if(lastHandLandmarks && lastHandLandmarks.length){
-    for(const hand of lastHandLandmarks){
-      dotsCtx.strokeStyle = '#FFFFFF';
-      dotsCtx.lineWidth = 1.5;
-      for(const [a,b] of HAND_CONNECTIONS){
-        const pa = hand[a], pb = hand[b];
-        if(!pa || !pb) continue;
-        dotsCtx.beginPath();
-        dotsCtx.moveTo(pa.x*dotsCanvas.width, pa.y*dotsCanvas.height);
-        dotsCtx.lineTo(pb.x*dotsCanvas.width, pb.y*dotsCanvas.height);
-        dotsCtx.stroke();
-      }
-      dotsCtx.fillStyle = '#0b1f6b';
-      for(const lm of hand){
-        dotsCtx.beginPath();
-        dotsCtx.arc(lm.x*dotsCanvas.width, lm.y*dotsCanvas.height, 2, 0, Math.PI*2);
-        dotsCtx.fill();
-      }
-    }
-  }
 }
 
 // Capture now grabs the rendered glCanvas only -- since the background is
@@ -1464,11 +923,6 @@ flipBtn.addEventListener('click', ()=>{
 dotsBtn.addEventListener('click', ()=>{
   showDots = !showDots;
   dotsBtn.classList.toggle('active', showDots);
-});
-
-poseRetargetBtn.addEventListener('click', ()=>{
-  poseRetargetEnabled = !poseRetargetEnabled;
-  poseRetargetBtn.classList.toggle('active', poseRetargetEnabled);
 });
 
 envBtn.addEventListener('click', ()=>{
