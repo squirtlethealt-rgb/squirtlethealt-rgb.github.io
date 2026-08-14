@@ -317,6 +317,12 @@ let manualOffset = {x:0, y:0};
 let suitLoadFailed = false;
 const CHEEK_L = 234, CHEEK_R = 454;
 const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
+// Shrinks just the Head bone (helmet + neck ring geometry skinned to it)
+// relative to the shoulders/body, since the raw GLB reads a bit
+// "bobblehead" once the shoulders fill the frame. The face card is scaled
+// by the same factor below so it stays in proportion with the now-smaller
+// visor instead of looking oversized inside it.
+const HEAD_SCALE = 0.82;
 
 // Tracking variables removed for procedural animations
 let dragging = false, dragStart = {x:0,y:0};
@@ -836,6 +842,7 @@ function updatePlacementAndPose(){
     const headBaselineWorldQuat = headParentWorldQuat.clone().multiply(headBindLocalQuat);
     const headFinalWorldQuat = headResidualQuat.clone().multiply(headBaselineWorldQuat);
     bones['Head'].quaternion.copy(headParentWorldQuat.clone().invert().multiply(headFinalWorldQuat));
+    bones['Head'].scale.setScalar(HEAD_SCALE);
     bones['Head'].updateWorldMatrix(true, false);
     
     // Copy the final world rotation of the head to the proxy, adjusting for maskGroup's own rotation
@@ -889,7 +896,7 @@ function updatePlacementAndPose(){
       // face horizontally, since the geometry got wider than its texture
       // crop without the crop itself changing.
       const FACE_CARD_BOOST = 1.35;
-      const targetHeight = 0.32 * FACE_CARD_BOOST;
+      const targetHeight = 0.32 * FACE_CARD_BOOST * HEAD_SCALE;
       const targetWidth = targetHeight * (ew / eh) * (video.videoWidth / video.videoHeight);
       
       // Flat plane now, so just a plain X/Y size -- no curvature axis to
