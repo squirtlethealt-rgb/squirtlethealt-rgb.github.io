@@ -987,13 +987,33 @@ snapBtn.addEventListener('click', ()=>{
   shot.width = video.videoWidth || glCanvas.width;
   shot.height = video.videoHeight || glCanvas.height;
   const sctx = shot.getContext('2d');
-  // Keep the same mirrored orientation the user sees on screen (glCanvas
-  // is displayed with CSS scaleX(-1), but its raw pixel buffer is not
-  // mirrored, so flip it the same way here).
+  
+  // Draw the background image first so it's part of the saved photo!
+  const bgImg = document.getElementById('bgImg');
+  if(bgImg && bgImg.complete && bgImg.naturalWidth > 0){
+    const scale = Math.max(shot.width / bgImg.naturalWidth, shot.height / bgImg.naturalHeight);
+    const w = bgImg.naturalWidth * scale;
+    const h = bgImg.naturalHeight * scale;
+    const x = (shot.width - w) / 2;
+    const y = (shot.height - h) / 2;
+    sctx.drawImage(bgImg, x, y, w, h);
+  } else {
+    // Fallback if background image is missing
+    sctx.fillStyle = '#0b1f6b';
+    sctx.fillRect(0, 0, shot.width, shot.height);
+  }
+
+  // Force a synchronous render right before drawing to guarantee the buffer isn't empty
+  if(maskGroup && bonesReady && renderer && scene && camera){
+    renderer.render(scene, camera);
+  }
+
+  // Keep the same mirrored orientation the user sees on screen for the 3D scene
+  sctx.save();
   sctx.translate(shot.width, 0);
   sctx.scale(-1, 1);
   sctx.drawImage(glCanvas, 0, 0, shot.width, shot.height);
-  sctx.setTransform(1,0,0,1,0,0);
+  sctx.restore();
 
   // Burn the text overlay into the capture so it shows in the saved image.
   const tw = shot.width;
