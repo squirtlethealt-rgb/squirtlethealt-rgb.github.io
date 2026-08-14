@@ -277,6 +277,7 @@ let helmetMeshes = [];
 let helmetRemoved = false;
 let faceCardMesh = null;
 let faceTexture = null;
+let headProxy = null;
 
 // Standard MediaPipe face-mesh "face oval" landmark loop (ordered so
 // consecutive indices trace the outline), used to build the clip box.
@@ -576,28 +577,28 @@ function loadSuit(){
       
       // --- Create the 3D Face Card ---
       faceTexture = new THREE.VideoTexture(video);
-      // We don't want the face texture to repeat if we are cropping it
       faceTexture.wrapS = THREE.ClampToEdgeWrapping;
       faceTexture.wrapT = THREE.ClampToEdgeWrapping;
+      // Ensure color space is correct
+      faceTexture.colorSpace = THREE.SRGBColorSpace;
       
       const faceCardMat = new THREE.MeshBasicMaterial({ 
         map: faceTexture,
         side: THREE.DoubleSide
       });
-      // The plane starts with a generic 1x1 size, we'll scale it dynamically
       faceCardMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), faceCardMat);
       
-      // Position the face card slightly forward and up relative to the Head bone origin
-      // so it sits exactly behind the visor glass. (Adjust Y and Z as needed)
-      faceCardMesh.position.set(0, 0.12, 0.12);
+      // Instead of guessing the Head bone's internal axes, we attach it to a proxy group
+      // directly inside maskGroup, which has standard predictable axes (+Y up, +Z forward).
+      headProxy = new THREE.Group();
+      maskGroup.add(headProxy);
       
-      // If the model's head bone local axes are oriented weirdly, we might need a rotation here.
-      // But usually, attaching it directly works, or just a 180 flip if it's mirrored.
+      // Position the face card slightly forward (and slightly up if needed) from the neck joint
+      // 0.12 units forward is roughly 12cm.
+      faceCardMesh.position.set(0, 0.08, 0.14);
       faceCardMesh.visible = helmetRemoved;
       
-      if (bones['Head']) {
-        bones['Head'].add(faceCardMesh);
-      }
+      headProxy.add(faceCardMesh);
 
       for(const m of helmetMeshes) m.visible = !helmetRemoved;
       bonesReady = true;
@@ -775,6 +776,14 @@ function updatePlacementAndPose(){
     const headFinalWorldQuat = headResidualQuat.clone().multiply(headBaselineWorldQuat);
     bones['Head'].quaternion.copy(headParentWorldQuat.clone().invert().multiply(headFinalWorldQuat));
     bones['Head'].updateWorldMatrix(true, false);
+    
+    // Copy the final world rotation of the head to the proxy, adjusting for maskGroup's own rotation
+    if (headProxy) {
+      const maskWorldQuat = new THREE.Quaternion();
+      maskGroup.getWorldQuaternion(maskWorldQuat);
+      headProxy.quaternion.copy(maskWorldQuat.clone().invert().multiply(headFinalWorldQuat));
+      headProxy.updateMatrixWorld(true);
+    }
   }
 
   // Update Face Card texture cropping and visibility
