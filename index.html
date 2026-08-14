@@ -30,7 +30,6 @@
   video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;pointer-events:none;background:#000;}
   canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);pointer-events:none;}
   canvas.dots{z-index:3;}
-  #faceCanvas{z-index:2;}
 
   .status-dot{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;background:#777;z-index:12;box-shadow:0 0 8px #777;transition:background .25s,box-shadow .25s;}
   .status-dot.fitting{background:var(--saffron);box-shadow:0 0 8px var(--saffron);animation:blink 0.9s ease-in-out infinite;}
@@ -108,7 +107,6 @@
   <div class="bg-layer" id="bgLayer"><img src="bg.jpg.jpeg" alt="" id="bgImg"></div>
   <video id="video" playsinline muted></video>
   <canvas class="gl" id="glCanvas"></canvas>
-  <canvas id="faceCanvas"></canvas>
   <canvas class="dots" id="dotsCanvas"></canvas>
 
   <div class="status-dot" id="statusDot"></div>
@@ -245,8 +243,6 @@ const HAND_Z_SIGN = -1;
 
 const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
-const faceCanvas = document.getElementById('faceCanvas');
-const faceCtx = faceCanvas.getContext('2d');
 const dotsCanvas = document.getElementById('dotsCanvas');
 const dotsCtx = dotsCanvas.getContext('2d');
 const statusEl = document.getElementById('status');
@@ -275,23 +271,15 @@ let poseRetargetEnabled = true;
 let flip180 = DEFAULT_FLIP;
 let envEnabled = true;
 
-// Visor open/close: rather than trying to texture-map live video onto the
-// 3D head bone (which would drift out of alignment any time our assumed
-// camera FOV doesn't exactly match the device's real one), we hide just
-// the visor pane's own mesh (see loadSuit() -- it's picked out from the
-// helmet shell/neck-ring by color, since it's the only one authored as
-// near-black tinted glass) and draw the real face as a flat 2D cutout of
-// the (already-hidden) video feed, clipped to the live face-oval
-// landmarks and drawn on its own canvas layer. Because it uses the exact
-// same landmark coordinates and canvas transform as the tracking dots,
-// it stays pixel-aligned with the face regardless of any 3D camera
-// mismatch -- and because it's clipped to just the oval, nothing else
-// from the real room is ever shown. The helmet shell and neck ring stay
-// visible throughout, so this reads as "visor up", not "helmet gone".
+// Visor open/close: We use a 3D face card (plane) placed inside the helmet 
+// with a VideoTexture. We dynamically crop it using FaceLandmarker points.
 let helmetMeshes = [];
 let helmetRemoved = false;
+let faceCardMesh = null;
+let faceTexture = null;
+
 // Standard MediaPipe face-mesh "face oval" landmark loop (ordered so
-// consecutive indices trace the outline), used to build the clip path.
+// consecutive indices trace the outline), used to build the clip box.
 const FACE_OVAL_LOOP = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
 // How far the visible cutout is grown beyond the raw face-oval landmarks,
 // scaled outward from the oval's own centroid -- see drawFaceCutout().
@@ -362,8 +350,6 @@ launchBtn.addEventListener('click', () => {
 function setViewfinderAspect(w, h){
   dotsCanvas.width = w;
   dotsCanvas.height = h;
-  faceCanvas.width = w;
-  faceCanvas.height = h;
 }
 
 startBtn.addEventListener('click', ()=>{
@@ -587,6 +573,32 @@ function loadSuit(){
       }
 
       maskGroup.add(root);
+      
+      // --- Create the 3D Face Card ---
+      faceTexture = new THREE.VideoTexture(video);
+      // We don't want the face texture to repeat if we are cropping it
+      faceTexture.wrapS = THREE.ClampToEdgeWrapping;
+      faceTexture.wrapT = THREE.ClampToEdgeWrapping;
+      
+      const faceCardMat = new THREE.MeshBasicMaterial({ 
+        map: faceTexture,
+        side: THREE.DoubleSide
+      });
+      // The plane starts with a generic 1x1 size, we'll scale it dynamically
+      faceCardMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), faceCardMat);
+      
+      // Position the face card slightly forward and up relative to the Head bone origin
+      // so it sits exactly behind the visor glass. (Adjust Y and Z as needed)
+      faceCardMesh.position.set(0, 0.12, 0.12);
+      
+      // If the model's head bone local axes are oriented weirdly, we might need a rotation here.
+      // But usually, attaching it directly works, or just a 180 flip if it's mirrored.
+      faceCardMesh.visible = helmetRemoved;
+      
+      if (bones['Head']) {
+        bones['Head'].add(faceCardMesh);
+      }
+
       for(const m of helmetMeshes) m.visible = !helmetRemoved;
       bonesReady = true;
       dracoLoader.dispose();
@@ -765,6 +777,40 @@ function updatePlacementAndPose(){
     bones['Head'].updateWorldMatrix(true, false);
   }
 
+  // Update Face Card texture cropping and visibility
+  if (faceCardMesh && faceTexture) {
+    faceCardMesh.visible = helmetRemoved;
+    if (helmetRemoved && lastFaceLandmarks) {
+      let minX = 1, maxX = 0, minY = 1, maxY = 0;
+      for (const idx of FACE_OVAL_LOOP) {
+        const lm = lastFaceLandmarks[idx];
+        if (lm) {
+          if (lm.x < minX) minX = lm.x;
+          if (lm.x > maxX) maxX = lm.x;
+          if (lm.y < minY) minY = lm.y;
+          if (lm.y > maxY) maxY = lm.y;
+        }
+      }
+      
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const w = maxX - minX;
+      const h = maxY - minY;
+      
+      const ew = w * FACE_CUTOUT_EXPAND;
+      const eh = h * FACE_CUTOUT_EXPAND;
+      
+      faceTexture.offset.set(cx - ew/2, 1 - (cy + eh/2));
+      faceTexture.repeat.set(ew, eh);
+      
+      // Keep the plane aspect ratio proportional to the cropped area.
+      // 0.23 is roughly the height of the face inside the helmet in local units.
+      const targetHeight = 0.23; 
+      const targetWidth = targetHeight * (ew / eh) * (video.videoWidth / video.videoHeight);
+      faceCardMesh.scale.set(targetWidth, targetHeight, 1);
+    }
+  }
+
   updateZeroGAnimation(performance.now() / 1000);
 }
 
@@ -783,56 +829,7 @@ async function loop(){
     updatePlacementAndPose();
     renderer.render(scene, camera);
   }
-  drawFaceCutout();
   requestAnimationFrame(loop);
-}
-
-// Draws the real face -- and only the face -- into faceCanvas, clipped to
-// the live face-oval landmarks. Runs every frame so the cutout tracks
-// head movement/expression exactly; draws nothing (canvas stays fully
-// transparent) whenever helmetRemoved is off or tracking is lost, so the
-// virtual suit/environment is all that shows the rest of the time.
-function drawFaceCutout(){
-  faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-  if(!helmetRemoved || !lastFaceLandmarks) return;
-
-  // Collect the raw oval points first (in pixel space) so we can grow the
-  // clip region outward from its own centroid before drawing it -- using
-  // the exact face-oval landmarks as the clip path was cutting right at
-  // the jaw/hairline edge, which left a sliver of visor/helmet showing at
-  // the boundary on some faces. Scaling every point out from the shape's
-  // center by FACE_CUTOUT_EXPAND gives the same oval a bit of margin on
-  // all sides without changing how it tracks.
-  const pts = [];
-  for(let i=0;i<FACE_OVAL_LOOP.length;i++){
-    const lm = lastFaceLandmarks[FACE_OVAL_LOOP[i]];
-    if(!lm) return;
-    pts.push({ x: lm.x * faceCanvas.width, y: lm.y * faceCanvas.height });
-  }
-  let cx = 0, cy = 0;
-  for(const p of pts){ cx += p.x; cy += p.y; }
-  cx /= pts.length; cy /= pts.length;
-
-  faceCtx.save();
-  // Apply VIRTUAL_ZOOM around the center of the screen to shrink the face cutout
-  faceCtx.translate(faceCanvas.width / 2, faceCanvas.height / 2);
-  faceCtx.scale(VIRTUAL_ZOOM, VIRTUAL_ZOOM);
-  faceCtx.translate(-faceCanvas.width / 2, -faceCanvas.height / 2);
-
-  faceCtx.beginPath();
-  for(let i=0;i<pts.length;i++){
-    const x = cx + (pts[i].x - cx) * FACE_CUTOUT_EXPAND;
-    const y = cy + (pts[i].y - cy) * FACE_CUTOUT_EXPAND;
-    if(i === 0) faceCtx.moveTo(x, y); else faceCtx.lineTo(x, y);
-  }
-  faceCtx.closePath();
-  faceCtx.clip();
-  // Raw (unmirrored) draw -- faceCanvas is CSS-mirrored the same way as
-  // dotsCanvas and glCanvas, and lastFaceLandmarks are in that same raw
-  // coordinate space, so this stays pixel-aligned with the tracking dots
-  // without any manual flip here.
-  faceCtx.drawImage(video, 0, 0, faceCanvas.width, faceCanvas.height);
-  faceCtx.restore();
 }
 
 function drawTrackingDots(){
