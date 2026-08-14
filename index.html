@@ -94,7 +94,7 @@
   .err-msg.show{display:block;}
 
   /* --- Text overlay (visible during AR session) --- */
-  .text-overlay{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 100px);z-index:10;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;opacity:0;transition:opacity .5s;}
+  .text-overlay{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 64px);z-index:10;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;opacity:0;transition:opacity .5s;}
   .text-overlay.visible{opacity:1;}
   .text-overlay .line1{font-family:'Orbitron',sans-serif;font-weight:700;font-size:clamp(11px,3.2vw,18px);color:var(--saffron);text-align:center;text-shadow:0 1px 8px rgba(0,0,0,0.8);letter-spacing:1.5px;text-transform:uppercase;padding:0 16px;}
   .text-overlay .line2{font-family:'Outfit',sans-serif;font-weight:400;font-size:clamp(13px,3.8vw,20px);color:#fff;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,0.8);padding:0 16px;}
@@ -1000,21 +1000,22 @@ snapBtn.addEventListener('click', ()=>{
   const th = shot.height;
   const fontSize1 = Math.max(14, Math.round(tw * 0.028));
   const fontSize2 = Math.max(16, Math.round(tw * 0.034));
-  const textY = th - Math.round(th * 0.12);
+  const topOffset = Math.round(th * 0.12);
 
   sctx.textAlign = 'center';
+  sctx.textBaseline = 'top';
   sctx.shadowColor = 'rgba(0,0,0,0.85)';
   sctx.shadowBlur = 10;
 
   // Line 1: anniversary
   sctx.font = `700 ${fontSize1}px Orbitron, sans-serif`;
   sctx.fillStyle = '#FF9933';
-  sctx.fillText('HAPPY 57TH ANNIVERSARY OF ISRO 🚀', tw/2, textY);
+  sctx.fillText('HAPPY 57TH ANNIVERSARY OF ISRO 🚀', tw/2, topOffset);
 
   // Line 2: vyomnaut name
   sctx.font = `400 ${fontSize2}px Outfit, sans-serif`;
   sctx.fillStyle = '#ffffff';
-  sctx.fillText(`I am ${userName}, a future Vyomnaut`, tw/2, textY + fontSize1 + 8);
+  sctx.fillText(`I am ${userName}, a future Vyomnaut`, tw/2, topOffset + fontSize1 + 8);
   sctx.shadowBlur = 0;
 
   const dataUrl = shot.toDataURL('image/png');
