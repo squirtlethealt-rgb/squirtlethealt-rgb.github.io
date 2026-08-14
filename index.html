@@ -901,6 +901,25 @@ function loadSuit(){
         }
       }
 
+      // Recompute boneTwist and boneRestAxis for forearm/hand bones AFTER
+      // the relaxed A-pose has been applied. The initial computation above
+      // used the original T-pose skeleton, but we've since rotated the
+      // shoulders and arms. If we don't update, pointBoneTo() will use
+      // stale T-pose twist values and the arms will appear backward/twisted
+      // the moment tracking kicks in.
+      const forearmHandBones = ['LeftForeArm','LeftHand','RightForeArm','RightHand'];
+      for (const name of forearmHandBones) {
+        const b = bones[name];
+        if (!b) continue;
+        let restAxis = new THREE.Vector3(0,1,0);
+        const cb = b.children.find(c => c.isBone);
+        if (cb && cb.position.lengthSq() > 1e-8) {
+          restAxis = cb.position.clone().normalize();
+        }
+        boneRestAxis[name] = restAxis;
+        boneTwist[name] = computeSwingTwist(b.quaternion.clone(), restAxis);
+      }
+
       maskGroup.add(root);
       for(const m of helmetMeshes) m.visible = !helmetRemoved;
       bonesReady = true;
