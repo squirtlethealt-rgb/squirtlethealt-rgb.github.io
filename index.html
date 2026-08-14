@@ -616,7 +616,15 @@ function loadSuit(){
       const faceCardMat = new THREE.MeshBasicMaterial({ 
         map: faceTexture,
         side: THREE.DoubleSide,
-        depthWrite: false
+        depthWrite: false,
+        // The flat plane doesn't bulge forward like the visor's dome, so
+        // at most head angles it actually sits behind the helmet's
+        // interior geometry and gets hidden by it -- only a sliver poked
+        // through before. It's already trimmed to exactly the visor's
+        // shape by the stencil test below, so it's safe to just always
+        // draw on top within that clipped region rather than fight
+        // per-pixel depth against the interior.
+        depthTest: false
       });
       // Only draw the face texture where the visor stencil mask above has
       // written a 1 -- this is what actually trims the video feed to the
