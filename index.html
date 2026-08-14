@@ -582,11 +582,18 @@ function loadSuit(){
       faceTexture.wrapT = THREE.ClampToEdgeWrapping;
       faceTexture.colorSpace = THREE.SRGBColorSpace;
       
+      // Explicitly disable flipY so texture V=0 maps to the TOP of the video, matching MediaPipe's Y=0
+      faceTexture.flipY = false;
+      
       const faceCardMat = new THREE.MeshBasicMaterial({ 
         map: faceTexture,
         side: THREE.DoubleSide
       });
-      faceCardMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), faceCardMat);
+      
+      // Use a CylinderGeometry to curve the face card!
+      // radius=0.5, height=1, 32 segments, openEnded=true, thetaStart=-30deg, thetaLength=60deg
+      const faceGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 32, 1, true, -Math.PI/6, Math.PI/3);
+      faceCardMesh = new THREE.Mesh(faceGeo, faceCardMat);
       
       // Instead of guessing the Head bone's internal axes, we attach it to a proxy group
       // directly inside maskGroup, which has standard predictable axes (+Y up, +Z forward).
@@ -809,18 +816,18 @@ function updatePlacementAndPose(){
       const ew = w * FACE_CUTOUT_EXPAND;
       const eh = h * FACE_CUTOUT_EXPAND;
       
-      // Update UVs to crop the VideoTexture to just the face.
-      // We must mirror the X axis (repeat.x = -ew) because the WebGL canvas is mirrored via CSS, 
-      // but the VideoTexture is raw (unmirrored). If we don't mirror it, the face inside the crop 
-      // box will be backwards and terribly misaligned!
-      faceTexture.repeat.set(-ew, eh);
-      faceTexture.offset.set(cx + ew/2, 1 - (cy + eh/2));
+      // With flipY = false, both MediaPipe and the Texture share the same coordinate system 
+      // (0,0 is top-left). We don't need to invert X because the CSS scaleX(-1) on the canvas 
+      // will naturally mirror the unmirrored texture for the user.
+      faceTexture.offset.set(cx - ew/2, cy - eh/2);
+      faceTexture.repeat.set(ew, eh);
       
-      // Keep the plane aspect ratio proportional to the cropped area.
-      // 0.23 is roughly the height of the face inside the helmet in local units.
+      // Keep the aspect ratio proportional.
       const targetHeight = 0.23; 
       const targetWidth = targetHeight * (ew / eh) * (video.videoWidth / video.videoHeight);
-      faceCardMesh.scale.set(targetWidth, targetHeight, 1);
+      
+      // Scale X and Z equally to maintain the circular curve of the cylinder!
+      faceCardMesh.scale.set(targetWidth, targetHeight, targetWidth);
     }
   }
 
