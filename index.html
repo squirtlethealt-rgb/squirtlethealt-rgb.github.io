@@ -317,12 +317,13 @@ let manualOffset = {x:0, y:0};
 let suitLoadFailed = false;
 const CHEEK_L = 234, CHEEK_R = 454;
 const MARK_POINTS = [234, 454, 1, 152, 10, 33, 263];
-// Shrinks just the Head bone (helmet + neck ring geometry skinned to it)
-// relative to the shoulders/body, since the raw GLB reads a bit
-// "bobblehead" once the shoulders fill the frame. The face card is scaled
-// by the same factor below so it stays in proportion with the now-smaller
-// visor instead of looking oversized inside it.
-const HEAD_SCALE = 0.82;
+// Uniformly shrinks the helmet's own mesh objects (shell/visor/neck-ring),
+// pivoted at the Neck bone -- see the pivot-group setup in loadSuit(). This
+// is a post-skinning object-level scale, not a bone scale, so it can't
+// desync skin-weight blending at the neck seam. The face card size below
+// is multiplied by the same factor so it stays in proportion with the
+// now-smaller visor opening.
+const HELMET_SCALE = 0.85;
 
 // Tracking variables removed for procedural animations
 let dragging = false, dragStart = {x:0,y:0};
@@ -598,6 +599,35 @@ function loadSuit(){
         headBindLocalQuat = bones['Head'].quaternion.clone();
       }
 
+      // --- Shrink the helmet toward the neck, as rigid objects ---
+      // The helmet shell/visor/neck-ring are already separate mesh
+      // primitives from the body (see helmetFamily above), so we can scale
+      // them as whole objects -- a scale set directly on a mesh's own
+      // Object3D transform is applied AFTER skinning, purely as a final
+      // placement multiply, so it cannot touch skin-weight blending the
+      // way scaling a shared bone did. We pivot around the Neck bone's
+      // actual world position (an existing skeleton landmark, not a
+      // guessed point) so the helmet's base stays anchored to the body
+      // and only the helmet shrinks toward it, instead of drifting away
+      // from or sinking into the shoulders.
+      if(bones['Neck'] && helmetMeshes.length){
+        const helmetParent = helmetMeshes[0].parent;
+        helmetParent.updateMatrixWorld(true);
+        const neckWorldPos = new THREE.Vector3();
+        bones['Neck'].getWorldPosition(neckWorldPos);
+        const helmetPivot = new THREE.Group();
+        helmetPivot.position.copy(helmetParent.worldToLocal(neckWorldPos.clone()));
+        helmetParent.add(helmetPivot);
+        // attach() preserves each mesh's current world transform while
+        // reparenting, so nothing jumps before the scale below is applied.
+        for(const m of [...helmetMeshes, ...visorStencilMeshes]){
+          helmetPivot.attach(m);
+        }
+        helmetPivot.scale.setScalar(HELMET_SCALE);
+      } else {
+        console.warn('Neck bone not found on this GLB -- skipping helmet resize (no safe pivot to scale around).');
+      }
+
 
       // Cache the base rotations after setting the A-pose so the procedural animation
       // can oscillate around them.
@@ -842,7 +872,6 @@ function updatePlacementAndPose(){
     const headBaselineWorldQuat = headParentWorldQuat.clone().multiply(headBindLocalQuat);
     const headFinalWorldQuat = headResidualQuat.clone().multiply(headBaselineWorldQuat);
     bones['Head'].quaternion.copy(headParentWorldQuat.clone().invert().multiply(headFinalWorldQuat));
-    bones['Head'].scale.setScalar(HEAD_SCALE);
     bones['Head'].updateWorldMatrix(true, false);
     
     // Copy the final world rotation of the head to the proxy, adjusting for maskGroup's own rotation
@@ -896,7 +925,7 @@ function updatePlacementAndPose(){
       // face horizontally, since the geometry got wider than its texture
       // crop without the crop itself changing.
       const FACE_CARD_BOOST = 1.35;
-      const targetHeight = 0.32 * FACE_CARD_BOOST * HEAD_SCALE;
+      const targetHeight = 0.32 * FACE_CARD_BOOST * HELMET_SCALE;
       const targetWidth = targetHeight * (ew / eh) * (video.videoWidth / video.videoHeight);
       
       // Flat plane now, so just a plain X/Y size -- no curvature axis to
