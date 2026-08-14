@@ -274,6 +274,7 @@ let envEnabled = true;
 // Visor open/close: We use a 3D face card (plane) placed inside the helmet 
 // with a VideoTexture. We dynamically crop it using FaceLandmarker points.
 let helmetMeshes = [];
+let visorStencilMeshes = [];
 let helmetRemoved = false;
 let faceCardMesh = null;
 let faceTexture = null;
@@ -402,7 +403,7 @@ async function startCamera(){
 }
 
 function initThree(){
-  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha:true, antialias:true });
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha:true, antialias:true, stencil:true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.75));
   renderer.setSize(video.videoWidth, video.videoHeight, false);
   scene = new THREE.Scene();
@@ -534,6 +535,33 @@ function loadSuit(){
         }
       }
 
+      // --- Build a stencil mask from the visor mesh(es) ---
+      // The face video card is a flat quad; it never matched the visor's
+      // actual (rounded/angled) opening, so it showed up as a hard-edged
+      // rectangle floating inside the helmet. Instead of trying to hand-
+      // shape a mesh to match, we clone the *real* visor geometry -- same
+      // skinning, same parent, so it moves identically -- and use it purely
+      // to stamp a 1 into the stencil buffer wherever the visor itself
+      // would be drawn (colorWrite/depthWrite both off, so it's invisible
+      // on its own). The face card is then only allowed to draw where that
+      // stencil value is set, which trims it to the visor's exact on-screen
+      // silhouette no matter its shape.
+      visorStencilMeshes = helmetMeshes.map(visorMesh=>{
+        const maskMesh = visorMesh.clone();
+        const stencilMat = new THREE.MeshBasicMaterial({ colorWrite:false, depthWrite:false });
+        stencilMat.stencilWrite = true;
+        stencilMat.stencilRef = 1;
+        stencilMat.stencilFunc = THREE.AlwaysStencilFunc;
+        stencilMat.stencilZPass = THREE.ReplaceStencilOp;
+        stencilMat.stencilFail = THREE.KeepStencilOp;
+        stencilMat.stencilZFail = THREE.KeepStencilOp;
+        maskMesh.material = stencilMat;
+        maskMesh.frustumCulled = false;
+        maskMesh.renderOrder = 5; // must draw (and write stencil) before the face card below
+        visorMesh.parent.add(maskMesh);
+        return maskMesh;
+      });
+
       bones = {};
       root.traverse(o=>{
         if(o.isBone){
@@ -587,8 +615,18 @@ function loadSuit(){
       
       const faceCardMat = new THREE.MeshBasicMaterial({ 
         map: faceTexture,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        depthWrite: false
       });
+      // Only draw the face texture where the visor stencil mask above has
+      // written a 1 -- this is what actually trims the video feed to the
+      // helmet's real visor-opening contour instead of a plain rectangle.
+      faceCardMat.stencilWrite = true;
+      faceCardMat.stencilRef = 1;
+      faceCardMat.stencilFunc = THREE.EqualStencilFunc;
+      faceCardMat.stencilFail = THREE.KeepStencilOp;
+      faceCardMat.stencilZFail = THREE.KeepStencilOp;
+      faceCardMat.stencilZPass = THREE.KeepStencilOp;
       
       // Use a CylinderGeometry to curve the face card!
       // radius=0.5, height=1, 32 segments, openEnded=true, thetaStart=-30deg, thetaLength=60deg
@@ -604,6 +642,7 @@ function loadSuit(){
       // 0.18 units forward to ensure it clears the suit's interior meshes.
       faceCardMesh.position.set(0, 0.08, 0.18);
       faceCardMesh.visible = helmetRemoved;
+      faceCardMesh.renderOrder = 10; // draw after the stencil mask (renderOrder 5) so the test applies
       
       headProxy.add(faceCardMesh);
 
@@ -822,8 +861,12 @@ function updatePlacementAndPose(){
       faceTexture.offset.set(cx - ew/2, cy - eh/2);
       faceTexture.repeat.set(ew, eh);
       
-      // Keep the aspect ratio proportional.
-      const targetHeight = 0.23; 
+      // Keep the aspect ratio proportional. Sized a bit larger than the
+      // visor opening on purpose -- the stencil mask (see loadSuit) clips
+      // any overflow to the visor's exact silhouette, so this only needs
+      // to be generous enough that no gap ever opens at the visor's edges
+      // as the head turns.
+      const targetHeight = 0.30;
       const targetWidth = targetHeight * (ew / eh) * (video.videoWidth / video.videoHeight);
       
       // Scale X and Z equally to maintain the circular curve of the cylinder!
