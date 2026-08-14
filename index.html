@@ -638,9 +638,11 @@ function loadSuit(){
       headProxy = new THREE.Group();
       maskGroup.add(headProxy);
       
-      // Position the face card slightly forward (and slightly up if needed) from the neck joint
-      // 0.18 units forward to ensure it clears the suit's interior meshes.
-      faceCardMesh.position.set(0, 0.08, 0.18);
+      // Position the face card slightly forward (and up) from the neck
+      // joint. 0.18 units forward clears the suit's interior meshes; the Y
+      // offset was raised from 0.08 to 0.14 to lift the face higher in the
+      // visor opening (the chin was getting cropped at the bottom before).
+      faceCardMesh.position.set(0, 0.14, 0.18);
       faceCardMesh.visible = helmetRemoved;
       faceCardMesh.renderOrder = 10; // draw after the stencil mask (renderOrder 5) so the test applies
       
@@ -858,8 +860,12 @@ function updatePlacementAndPose(){
       // With flipY = false, both MediaPipe and the Texture share the same coordinate system 
       // (0,0 is top-left). We don't need to invert X because the CSS scaleX(-1) on the canvas 
       // will naturally mirror the unmirrored texture for the user.
-      faceTexture.offset.set(cx - ew/2, cy - eh/2);
-      faceTexture.repeat.set(ew, eh);
+      // V is inverted here (negative repeat, offset pushed to the far edge)
+      // because the cylinder's own V axis runs bottom-to-top while the
+      // crop math above assumes top-to-bottom -- without this the face
+      // renders upside down.
+      faceTexture.offset.set(cx - ew/2, (cy - eh/2) + eh);
+      faceTexture.repeat.set(ew, -eh);
       
       // Keep the aspect ratio proportional. Sized a bit larger than the
       // visor opening on purpose -- the stencil mask (see loadSuit) clips
