@@ -628,9 +628,14 @@ function loadSuit(){
       faceCardMat.stencilZFail = THREE.KeepStencilOp;
       faceCardMat.stencilZPass = THREE.KeepStencilOp;
       
-      // Use a CylinderGeometry to curve the face card!
-      // radius=0.5, height=1, 32 segments, openEnded=true, thetaStart=-30deg, thetaLength=60deg
-      const faceGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 32, 1, true, -Math.PI/6, Math.PI/3);
+      // A flat plane rather than a curved cylinder strip -- the curve was
+      // why widening it (via scale.x) didn't reliably reach both edges of
+      // the visor at every head angle, leaving a grey sliver of bare visor
+      // showing on one side. A flat plane's width/height are a simple,
+      // predictable scale with no angular wrap-around to fight; we just
+      // make it comfortably larger than the visor and let the stencil mask
+      // (see loadSuit) clip the excess to the exact visor shape.
+      const faceGeo = new THREE.PlaneGeometry(1, 1);
       faceCardMesh = new THREE.Mesh(faceGeo, faceCardMat);
       
       // Instead of guessing the Head bone's internal axes, we attach it to a proxy group
@@ -874,15 +879,13 @@ function updatePlacementAndPose(){
       // as the head turns. FACE_CARD_WIDTH_BOOST widens it further on its
       // own (independent of height) since the visor opening on this
       // helmet reads noticeably wider than the plain aspect-ratio crop.
-      const FACE_CARD_WIDTH_BOOST = 1.7;
-      const targetHeight = 0.30;
+      const FACE_CARD_WIDTH_BOOST = 2.2;
+      const targetHeight = 0.32;
       const targetWidth = targetHeight * (ew / eh) * (video.videoWidth / video.videoHeight);
       
-      // X is boosted wider than Z on purpose (see FACE_CARD_WIDTH_BOOST
-      // above) -- Z alone still sets how deep the cylinder's curve reads,
-      // so widening only X stretches the visible plane without flattening
-      // or over-curving it.
-      faceCardMesh.scale.set(targetWidth * FACE_CARD_WIDTH_BOOST, targetHeight, targetWidth);
+      // Flat plane now, so just a plain X/Y size -- no curvature axis to
+      // keep in sync.
+      faceCardMesh.scale.set(targetWidth * FACE_CARD_WIDTH_BOOST, targetHeight, 1);
     }
   }
 
