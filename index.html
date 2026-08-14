@@ -230,6 +230,11 @@ const SCALE_BOOST = 1.0;
 const METERS_TO_SCENE_UNITS = 100;
 const DEFAULT_FLIP = true;
 
+// VIRTUAL_ZOOM scales down the entire avatar (both the 2D face cutout and the 
+// 3D suit) on the screen so it doesn't take up the entire view when the user 
+// holds the camera close to their face.
+const VIRTUAL_ZOOM = 0.65;
+
 const POSE_X_SIGN = 1;
 const POSE_Y_SIGN = -1;
 const POSE_Z_SIGN = -1;
@@ -718,7 +723,8 @@ function updatePlacementAndPose(){
   // Without the live shoulder-width tracking, we hardcode a reasonable baseline scale 
   // (0.45) to match the previous average so the suit matches the face cutout.
   const baseScale = 0.45;
-  const finalScale = baseScale * SCALE_BOOST * fine * METERS_TO_SCENE_UNITS;
+  // Apply VIRTUAL_ZOOM to shrink the 3D suit in sync with the 2D face cutout
+  const finalScale = baseScale * SCALE_BOOST * fine * METERS_TO_SCENE_UNITS * VIRTUAL_ZOOM;
   const flipYaw = flip180 ? Math.PI : 0;
   const calib = new THREE.Matrix4();
   calib.compose(
@@ -726,8 +732,13 @@ function updatePlacementAndPose(){
     new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt, flipYaw, 0)),
     new THREE.Vector3(finalScale, finalScale, finalScale)
   );
+  
+  // Apply VIRTUAL_ZOOM to the translation so the suit moves towards the center of the screen
+  const zoomedBase = base.clone();
+  zoomedBase.elements[12] *= VIRTUAL_ZOOM; // x translation
+  zoomedBase.elements[13] *= VIRTUAL_ZOOM; // y translation
 
-  maskGroup.matrix.copy(base).multiply(calib);
+  maskGroup.matrix.copy(zoomedBase).multiply(calib);
   maskGroup.matrixWorldNeedsUpdate = true;
   maskGroup.updateMatrixWorld(true);
 
@@ -803,6 +814,11 @@ function drawFaceCutout(){
   cx /= pts.length; cy /= pts.length;
 
   faceCtx.save();
+  // Apply VIRTUAL_ZOOM around the center of the screen to shrink the face cutout
+  faceCtx.translate(faceCanvas.width / 2, faceCanvas.height / 2);
+  faceCtx.scale(VIRTUAL_ZOOM, VIRTUAL_ZOOM);
+  faceCtx.translate(-faceCanvas.width / 2, -faceCanvas.height / 2);
+
   faceCtx.beginPath();
   for(let i=0;i<pts.length;i++){
     const x = cx + (pts[i].x - cx) * FACE_CUTOUT_EXPAND;
@@ -824,6 +840,11 @@ function drawTrackingDots(){
   if(!showDots) return;
 
   if(lastFaceLandmarks){
+    dotsCtx.save();
+    dotsCtx.translate(dotsCanvas.width / 2, dotsCanvas.height / 2);
+    dotsCtx.scale(VIRTUAL_ZOOM, VIRTUAL_ZOOM);
+    dotsCtx.translate(-dotsCanvas.width / 2, -dotsCanvas.height / 2);
+    
     dotsCtx.fillStyle = '#FF9933';
     for(const idx of MARK_POINTS){
       const lm = lastFaceLandmarks[idx];
@@ -834,6 +855,7 @@ function drawTrackingDots(){
       dotsCtx.arc(x, y, 3, 0, Math.PI*2);
       dotsCtx.fill();
     }
+    dotsCtx.restore();
   }
 }
 
