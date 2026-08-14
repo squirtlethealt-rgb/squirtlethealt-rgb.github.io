@@ -583,7 +583,6 @@ function loadSuit(){
       if (bones['LeftArm']) {
         bones['LeftArm'].rotateZ(THREE.MathUtils.degToRad(-65));
         bones['LeftArm'].rotateY(THREE.MathUtils.degToRad(-10));
-        boneBindLocalQuat['LeftArm'] = bones['LeftArm'].quaternion.clone();
         bones['LeftArm'].updateWorldMatrix(true, false);
       }
 
@@ -595,7 +594,6 @@ function loadSuit(){
       if (bones['RightArm']) {
         bones['RightArm'].rotateZ(THREE.MathUtils.degToRad(65));
         bones['RightArm'].rotateY(THREE.MathUtils.degToRad(10));
-        boneBindLocalQuat['RightArm'] = bones['RightArm'].quaternion.clone();
         bones['RightArm'].updateWorldMatrix(true, false);
       }
 
