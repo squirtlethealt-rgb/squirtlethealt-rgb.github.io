@@ -285,10 +285,8 @@ let headProxy = null;
 const FACE_OVAL_LOOP = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
 // How far the visible cutout is grown beyond the raw face-oval landmarks,
 // scaled outward from the oval's own centroid -- see drawFaceCutout().
-// 1.0 = exactly the landmark outline (was clipping right at the jaw/
-// hairline edge). Kept modest so it still reads as "your face", not a
-// big flat patch of video pasted over the helmet.
-const FACE_CUTOUT_EXPAND = 1.18;
+// Increased to 1.6 to make the user's face appear smaller inside the helmet visor.
+const FACE_CUTOUT_EXPAND = 1.6;
 
 let faceLandmarker = null;
 let trackingReady = false;
