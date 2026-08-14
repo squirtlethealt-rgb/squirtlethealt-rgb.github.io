@@ -440,6 +440,7 @@ const POSE_VISIBILITY_MIN_ARM = 0.75;
 // instead of freezing at the last (possibly bad) live estimate, so a
 // single noisy frame can't leave a knee or finger stuck bent.
 let boneBindLocalQuat = {};
+let boneRestAxis = {};
 const RETURN_TO_BIND_RATE = 0.12;
 
 // Exponential smoothing on raw landmark positions before they ever reach
@@ -805,7 +806,15 @@ function loadSuit(){
       for(const name of posedBoneNames){
         const b = bones[name];
         if(!b) continue;
-        boneTwist[name] = computeSwingTwist(b.quaternion.clone());
+        
+        let restAxis = new THREE.Vector3(0,1,0);
+        const cb = b.children.find(c => c.isBone);
+        if (cb && cb.position.lengthSq() > 1e-8) {
+          restAxis = cb.position.clone().normalize();
+        }
+        boneRestAxis[name] = restAxis;
+
+        boneTwist[name] = computeSwingTwist(b.quaternion.clone(), restAxis);
         boneBindLocalQuat[name] = b.quaternion.clone();
       }
 
@@ -917,14 +926,14 @@ function mpVecHand(lm){
 const _tmpQ = new THREE.Quaternion();
 const RESTY = new THREE.Vector3(0,1,0);
 
-function pointBoneTo(bone, targetWorldDir, twistQuat){
+function pointBoneTo(bone, targetWorldDir, twistQuat, restAxis = RESTY){
   bone.parent.updateWorldMatrix(true, false);
   bone.parent.getWorldQuaternion(_tmpQ);
   _tmpQ.invert();
   const localDir = targetWorldDir.clone().applyQuaternion(_tmpQ);
   if(localDir.lengthSq() < 1e-8) return;
   localDir.normalize();
-  const swing = new THREE.Quaternion().setFromUnitVectors(RESTY, localDir);
+  const swing = new THREE.Quaternion().setFromUnitVectors(restAxis, localDir);
   // Recompose with this bone's ORIGINAL bind-pose twist instead of
   // discarding it. setFromUnitVectors alone always returns the
   // shortest-arc rotation with zero twist around the target axis --
@@ -940,9 +949,9 @@ function pointBoneTo(bone, targetWorldDir, twistQuat){
 // Decomposes a bone's true bind-pose LOCAL quaternion into swing (aim
 // toward its child) + twist (roll around that aim axis). Only the twist
 // part needs to be cached and reapplied every frame -- see pointBoneTo().
-function computeSwingTwist(bindLocalQuat){
-  const bindDir = new THREE.Vector3(0,1,0).applyQuaternion(bindLocalQuat).normalize();
-  const swing = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), bindDir);
+function computeSwingTwist(bindLocalQuat, restAxis = RESTY){
+  const bindDir = restAxis.clone().applyQuaternion(bindLocalQuat).normalize();
+  const swing = new THREE.Quaternion().setFromUnitVectors(restAxis, bindDir);
   return swing.clone().invert().multiply(bindLocalQuat);
 }
 
@@ -1030,7 +1039,7 @@ function applyPoseToSkeleton(worldLandmarks){
       const dir = mpVec(c).sub(mpVec(p));
       const liveLen = dir.length();
       if(liveLen >= 1e-4){
-        pointBoneTo(bone, dir.clone().normalize(), boneTwist[boneName]);
+        pointBoneTo(bone, dir.clone().normalize(), boneTwist[boneName], boneRestAxis[boneName]);
         continue;
       }
     }
@@ -1052,7 +1061,7 @@ function applyFingersToSkeleton(handWorldByLabel){
     if(p && c){
       const dir = mpVecHand(c).sub(mpVecHand(p));
       if(dir.lengthSq() >= 1e-8){
-        pointBoneTo(bone, dir.normalize(), boneTwist[boneName]);
+        pointBoneTo(bone, dir.normalize(), boneTwist[boneName], boneRestAxis[boneName]);
         continue;
       }
     }
