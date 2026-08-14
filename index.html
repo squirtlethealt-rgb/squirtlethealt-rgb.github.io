@@ -194,7 +194,7 @@
   </div>
   <div class="sheet-row">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-    <input type="range" id="rHeight" min="-120" max="120" step="0.5" value="-15">
+    <input type="range" id="rHeight" min="-120" max="120" step="0.5" value="-12">
   </div>
   <div class="sheet-row">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.5-7.1"/><polyline points="21 3 21 9 15 9"/></svg>
@@ -852,17 +852,29 @@ function loadSuit(){
         armRestWorldDir[name] = new THREE.Vector3(0,1,0).applyQuaternion(q).normalize();
       }
 
-      // Hardcode a relaxed A-pose by applying explicit local rotations to the shoulders.
-      // This bypasses the IK solver which previously failed on axes, guaranteeing the arms point down.
+      // Hardcode a relaxed A-pose by applying explicit local rotations to the shoulders and arms.
+      // We relax the clavicles (Shoulder bones) downwards so the character doesn't look hunched/wide,
+      // and point the upper arms down.
+      if (bones['LeftShoulder']) {
+        bones['LeftShoulder'].rotateZ(THREE.MathUtils.degToRad(-15));
+        bones['LeftShoulder'].rotateY(THREE.MathUtils.degToRad(-5));
+        bones['LeftShoulder'].updateWorldMatrix(true, false);
+      }
       if (bones['LeftArm']) {
-        bones['LeftArm'].rotateZ(THREE.MathUtils.degToRad(-75));
-        bones['LeftArm'].rotateY(THREE.MathUtils.degToRad(-15));
+        bones['LeftArm'].rotateZ(THREE.MathUtils.degToRad(-65));
+        bones['LeftArm'].rotateY(THREE.MathUtils.degToRad(-10));
         boneBindLocalQuat['LeftArm'] = bones['LeftArm'].quaternion.clone();
         bones['LeftArm'].updateWorldMatrix(true, false);
       }
+
+      if (bones['RightShoulder']) {
+        bones['RightShoulder'].rotateZ(THREE.MathUtils.degToRad(15));
+        bones['RightShoulder'].rotateY(THREE.MathUtils.degToRad(5));
+        bones['RightShoulder'].updateWorldMatrix(true, false);
+      }
       if (bones['RightArm']) {
-        bones['RightArm'].rotateZ(THREE.MathUtils.degToRad(75));
-        bones['RightArm'].rotateY(THREE.MathUtils.degToRad(15));
+        bones['RightArm'].rotateZ(THREE.MathUtils.degToRad(65));
+        bones['RightArm'].rotateY(THREE.MathUtils.degToRad(10));
         boneBindLocalQuat['RightArm'] = bones['RightArm'].quaternion.clone();
         bones['RightArm'].updateWorldMatrix(true, false);
       }
