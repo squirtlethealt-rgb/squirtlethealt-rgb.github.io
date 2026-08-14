@@ -741,7 +741,7 @@ function updatePlacementAndPose(){
 
   // Without the live shoulder-width tracking, we hardcode a reasonable baseline scale 
   // (0.013) to match the previous average so the suit doesn't blow up to 100x size.
-  const baseScale = 0.013;
+  const baseScale = 0.13;
   const finalScale = baseScale * SCALE_BOOST * fine * METERS_TO_SCENE_UNITS;
   const flipYaw = flip180 ? Math.PI : 0;
   const calib = new THREE.Matrix4();
