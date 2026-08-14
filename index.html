@@ -572,30 +572,6 @@ function loadSuit(){
         headBindLocalQuat = bones['Head'].quaternion.clone();
       }
 
-      // Hardcode a relaxed A-pose by applying explicit local rotations to the shoulders and arms.
-      // We relax the clavicles (Shoulder bones) downwards so the character doesn't look hunched/wide,
-      // and point the upper arms down.
-      if (bones['LeftShoulder']) {
-        bones['LeftShoulder'].rotateZ(THREE.MathUtils.degToRad(-15));
-        bones['LeftShoulder'].rotateY(THREE.MathUtils.degToRad(-5));
-        bones['LeftShoulder'].updateWorldMatrix(true, false);
-      }
-      if (bones['LeftArm']) {
-        bones['LeftArm'].rotateZ(THREE.MathUtils.degToRad(-65));
-        bones['LeftArm'].rotateY(THREE.MathUtils.degToRad(-10));
-        bones['LeftArm'].updateWorldMatrix(true, false);
-      }
-
-      if (bones['RightShoulder']) {
-        bones['RightShoulder'].rotateZ(THREE.MathUtils.degToRad(15));
-        bones['RightShoulder'].rotateY(THREE.MathUtils.degToRad(5));
-        bones['RightShoulder'].updateWorldMatrix(true, false);
-      }
-      if (bones['RightArm']) {
-        bones['RightArm'].rotateZ(THREE.MathUtils.degToRad(65));
-        bones['RightArm'].rotateY(THREE.MathUtils.degToRad(10));
-        bones['RightArm'].updateWorldMatrix(true, false);
-      }
 
       // Cache the base rotations after setting the A-pose so the procedural animation
       // can oscillate around them.
