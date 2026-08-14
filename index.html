@@ -525,14 +525,14 @@ function loadSuit(){
       // primitive, we still fail safe -- worst case nothing opens, rather
       // than accidentally hiding the shell or neck ring by mistake.
       helmetMeshes = helmetFamily.filter(h => h.brightness < 0.2).map(h => h.mesh);
-      // Store original materials so we can toggle between opaque and
-      // semi-transparent (tinted glass) instead of fully hiding the visor.
+      // Replace the visor material with a plain flat black -- no
+      // specular/reflection shading -- so the closed-helmet visor reads as
+      // clean opaque black. We no longer toggle opacity/transparency on
+      // this material (see helmetBtn handler below): the visor is simply
+      // shown or hidden, so there's nothing to restore an "original"
+      // material for.
       for(const m of helmetMeshes){
-        const mats = Array.isArray(m.material) ? m.material : [m.material];
-        for(const mat of mats){
-          mat._origOpacity = mat.opacity;
-          mat._origTransparent = mat.transparent;
-        }
+        m.material = new THREE.MeshBasicMaterial({ color: 0x000000 });
       }
 
       // --- Build a stencil mask from the visor mesh(es) ---
@@ -942,9 +942,9 @@ function drawTrackingDots(){
   }
 }
 
-// Capture now grabs the rendered glCanvas only -- since the background is
-// fully virtual (rendered by Three.js, not the camera), there's no need
-// to composite the real video frame underneath anymore.
+// Capture now grabs the rendered glCanvas only -- the face cutout is
+// already rendered into glCanvas as part of the Three.js scene (the
+// stencil-clipped face card mesh), so there's nothing extra to composite.
 snapBtn.addEventListener('click', ()=>{
   const shot = document.createElement('canvas');
   shot.width = video.videoWidth || glCanvas.width;
@@ -956,9 +956,6 @@ snapBtn.addEventListener('click', ()=>{
   sctx.translate(shot.width, 0);
   sctx.scale(-1, 1);
   sctx.drawImage(glCanvas, 0, 0, shot.width, shot.height);
-  // Face cutout sits above the suit render, so composite it in the same
-  // mirrored pass -- it's already the same size/orientation as glCanvas.
-  sctx.drawImage(faceCanvas, 0, 0, shot.width, shot.height);
   sctx.setTransform(1,0,0,1,0,0);
 
   // Burn the text overlay into the capture so it shows in the saved image.
@@ -1016,28 +1013,15 @@ envBtn.addEventListener('click', ()=>{
 
 helmetBtn.addEventListener('click', ()=>{
   helmetRemoved = !helmetRemoved;
-  // Instead of hiding the visor entirely, make it semi-transparent (tinted
-  // glass look) so the face cutout shows through but alignment drift is
-  // masked by the tint overlay.
-  for(const m of helmetMeshes){
-    const mats = Array.isArray(m.material) ? m.material : [m.material];
-    for(const mat of mats){
-      if(helmetRemoved){
-        mat.transparent = true;
-        mat.opacity = 0.18;
-        mat.depthWrite = false;
-      } else {
-        mat.transparent = mat._origTransparent || false;
-        mat.opacity = mat._origOpacity !== undefined ? mat._origOpacity : 1;
-        mat.depthWrite = true;
-      }
-      mat.needsUpdate = true;
-    }
-  }
+  // Simple show/hide -- no more semi-transparent "tinted glass" blend.
+  // The visor is plain opaque black (see loadSuit), so when the face is
+  // shown we just hide it outright, and show it again when the face is
+  // hidden. Blending the two together was what caused the ghosted
+  // double-image look: the visor's own curved silhouette doesn't match
+  // the flat face card's stencil-clipped shape, so a translucent visor
+  // left a faint mismatched outline floating over the face.
+  for(const m of helmetMeshes) m.visible = !helmetRemoved;
   helmetBtn.classList.toggle('active', helmetRemoved);
-  if(!helmetRemoved){
-    faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-  }
 });
 
 function openSheet(){ sheet.classList.add('open'); sheetBackdrop.classList.add('open'); }
