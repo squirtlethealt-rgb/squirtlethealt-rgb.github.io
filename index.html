@@ -410,7 +410,7 @@ async function startCamera(){
 }
 
 function initThree(){
-  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha:true, antialias:true, stencil:true });
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha:true, antialias:true, stencil:true, preserveDrawingBuffer:true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.75));
   renderer.setSize(video.videoWidth, video.videoHeight, false);
   scene = new THREE.Scene();
