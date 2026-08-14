@@ -278,10 +278,6 @@ let helmetRemoved = false;
 let faceCardMesh = null;
 let faceTexture = null;
 let headProxy = null;
-const faceCropCanvas = document.createElement('canvas');
-faceCropCanvas.width = 512;
-faceCropCanvas.height = 512;
-const faceCropCtx = faceCropCanvas.getContext('2d');
 
 // Standard MediaPipe face-mesh "face oval" landmark loop (ordered so
 // consecutive indices trace the outline), used to build the clip box.
@@ -580,8 +576,10 @@ function loadSuit(){
       maskGroup.add(root);
       
       // --- Create the 3D Face Card ---
-      // Use CanvasTexture instead of VideoTexture for bulletproof mobile compatibility
-      faceTexture = new THREE.CanvasTexture(faceCropCanvas);
+      // Use VideoTexture with UV cropping (hardware accelerated, highly robust)
+      faceTexture = new THREE.VideoTexture(video);
+      faceTexture.wrapS = THREE.ClampToEdgeWrapping;
+      faceTexture.wrapT = THREE.ClampToEdgeWrapping;
       faceTexture.colorSpace = THREE.SRGBColorSpace;
       
       const faceCardMat = new THREE.MeshBasicMaterial({ 
@@ -811,18 +809,12 @@ function updatePlacementAndPose(){
       const ew = w * FACE_CUTOUT_EXPAND;
       const eh = h * FACE_CUTOUT_EXPAND;
       
-      // Calculate crop coordinates in video pixel space
-      const pxMinX = (cx - ew/2) * video.videoWidth;
-      const pxMinY = (cy - eh/2) * video.videoHeight;
-      const pxW = ew * video.videoWidth;
-      const pxH = eh * video.videoHeight;
-      
-      // Draw just the cropped face to the hidden canvas
-      if (pxW > 0 && pxH > 0 && video.videoWidth > 0) {
-        faceCropCtx.clearRect(0, 0, faceCropCanvas.width, faceCropCanvas.height);
-        faceCropCtx.drawImage(video, pxMinX, pxMinY, pxW, pxH, 0, 0, faceCropCanvas.width, faceCropCanvas.height);
-        faceTexture.needsUpdate = true;
-      }
+      // Update UVs to crop the VideoTexture to just the face.
+      // We must mirror the X axis (repeat.x = -ew) because the WebGL canvas is mirrored via CSS, 
+      // but the VideoTexture is raw (unmirrored). If we don't mirror it, the face inside the crop 
+      // box will be backwards and terribly misaligned!
+      faceTexture.repeat.set(-ew, eh);
+      faceTexture.offset.set(cx + ew/2, 1 - (cy + eh/2));
       
       // Keep the plane aspect ratio proportional to the cropped area.
       // 0.23 is roughly the height of the face inside the helmet in local units.
