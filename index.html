@@ -883,35 +883,32 @@ function loadSuit(){
         bones['RightArm'].updateWorldMatrix(true, false);
       }
 
-      // OVERRIDE the bind pose for arms so that they rest pointing downwards
-      // (like a relaxed A-pose) instead of floating back up into the default
-      // T-pose when tracking is lost. We process from parent to child so 
-      // the parent's world matrix is updated before pointing the child.
-      const armBonesDown = [
-        ['LeftArm', new THREE.Vector3(0.2, -1, 0.1)],
-        ['LeftForeArm', new THREE.Vector3(0, -1, 0)],
-        ['LeftHand', new THREE.Vector3(0, -1, 0)],
-        ['RightArm', new THREE.Vector3(-0.2, -1, 0.1)],
-        ['RightForeArm', new THREE.Vector3(0, -1, 0)],
-        ['RightHand', new THREE.Vector3(0, -1, 0)]
-      ];
-      for (const [name, targetWorldDir] of armBonesDown) {
-        const b = bones[name];
-        if (b && boneTwist[name] !== undefined) {
-          pointBoneTo(b, targetWorldDir.clone().normalize(), boneTwist[name]);
-          boneBindLocalQuat[name] = b.quaternion.clone();
-          b.updateWorldMatrix(true, false);
-        }
+      // Set forearms to hang straight down from the elbows.
+      // Using direct Euler rotations (not pointBoneTo) so the rest pose
+      // is fully deterministic and can't produce backward twists.
+      if (bones['LeftForeArm']) {
+        bones['LeftForeArm'].rotation.set(0, 0, 0);
+        bones['LeftForeArm'].updateWorldMatrix(true, false);
+      }
+      if (bones['RightForeArm']) {
+        bones['RightForeArm'].rotation.set(0, 0, 0);
+        bones['RightForeArm'].updateWorldMatrix(true, false);
+      }
+      if (bones['LeftHand']) {
+        bones['LeftHand'].rotation.set(0, 0, 0);
+        bones['LeftHand'].updateWorldMatrix(true, false);
+      }
+      if (bones['RightHand']) {
+        bones['RightHand'].rotation.set(0, 0, 0);
+        bones['RightHand'].updateWorldMatrix(true, false);
       }
 
-      // Recompute boneTwist and boneRestAxis for forearm/hand bones AFTER
-      // the relaxed A-pose has been applied. The initial computation above
-      // used the original T-pose skeleton, but we've since rotated the
-      // shoulders and arms. If we don't update, pointBoneTo() will use
-      // stale T-pose twist values and the arms will appear backward/twisted
-      // the moment tracking kicks in.
-      const forearmHandBones = ['LeftForeArm','LeftHand','RightForeArm','RightHand'];
-      for (const name of forearmHandBones) {
+      // Now recompute boneTwist, boneRestAxis, and boneBindLocalQuat for
+      // ALL tracked arm bones from their FINAL posed state. This ensures
+      // the IK solver (pointBoneTo) uses values consistent with the actual
+      // rest pose, not the stale T-pose values computed earlier.
+      const allTrackedArmBones = ['LeftArm','LeftForeArm','LeftHand','RightArm','RightForeArm','RightHand'];
+      for (const name of allTrackedArmBones) {
         const b = bones[name];
         if (!b) continue;
         let restAxis = new THREE.Vector3(0,1,0);
@@ -921,6 +918,7 @@ function loadSuit(){
         }
         boneRestAxis[name] = restAxis;
         boneTwist[name] = computeSwingTwist(b.quaternion.clone(), restAxis);
+        boneBindLocalQuat[name] = b.quaternion.clone();
       }
 
       maskGroup.add(root);
