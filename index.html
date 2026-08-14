@@ -105,7 +105,7 @@
 
 <div class="stage" id="stage">
   <div class="bg-layer" id="bgLayer"><img src="bg.jpg.jpeg" alt="" id="bgImg"></div>
-  <video id="video" playsinline muted></video>
+  <video id="video" playsinline webkit-playsinline autoplay muted></video>
   <canvas class="gl" id="glCanvas"></canvas>
   <canvas class="dots" id="dotsCanvas"></canvas>
 
@@ -278,6 +278,10 @@ let helmetRemoved = false;
 let faceCardMesh = null;
 let faceTexture = null;
 let headProxy = null;
+const faceCropCanvas = document.createElement('canvas');
+faceCropCanvas.width = 512;
+faceCropCanvas.height = 512;
+const faceCropCtx = faceCropCanvas.getContext('2d');
 
 // Standard MediaPipe face-mesh "face oval" landmark loop (ordered so
 // consecutive indices trace the outline), used to build the clip box.
@@ -576,10 +580,8 @@ function loadSuit(){
       maskGroup.add(root);
       
       // --- Create the 3D Face Card ---
-      faceTexture = new THREE.VideoTexture(video);
-      faceTexture.wrapS = THREE.ClampToEdgeWrapping;
-      faceTexture.wrapT = THREE.ClampToEdgeWrapping;
-      // Ensure color space is correct
+      // Use CanvasTexture instead of VideoTexture for bulletproof mobile compatibility
+      faceTexture = new THREE.CanvasTexture(faceCropCanvas);
       faceTexture.colorSpace = THREE.SRGBColorSpace;
       
       const faceCardMat = new THREE.MeshBasicMaterial({ 
@@ -594,8 +596,8 @@ function loadSuit(){
       maskGroup.add(headProxy);
       
       // Position the face card slightly forward (and slightly up if needed) from the neck joint
-      // 0.12 units forward is roughly 12cm.
-      faceCardMesh.position.set(0, 0.08, 0.14);
+      // 0.18 units forward to ensure it clears the suit's interior meshes.
+      faceCardMesh.position.set(0, 0.08, 0.18);
       faceCardMesh.visible = helmetRemoved;
       
       headProxy.add(faceCardMesh);
@@ -809,8 +811,18 @@ function updatePlacementAndPose(){
       const ew = w * FACE_CUTOUT_EXPAND;
       const eh = h * FACE_CUTOUT_EXPAND;
       
-      faceTexture.offset.set(cx - ew/2, 1 - (cy + eh/2));
-      faceTexture.repeat.set(ew, eh);
+      // Calculate crop coordinates in video pixel space
+      const pxMinX = (cx - ew/2) * video.videoWidth;
+      const pxMinY = (cy - eh/2) * video.videoHeight;
+      const pxW = ew * video.videoWidth;
+      const pxH = eh * video.videoHeight;
+      
+      // Draw just the cropped face to the hidden canvas
+      if (pxW > 0 && pxH > 0 && video.videoWidth > 0) {
+        faceCropCtx.clearRect(0, 0, faceCropCanvas.width, faceCropCanvas.height);
+        faceCropCtx.drawImage(video, pxMinX, pxMinY, pxW, pxH, 0, 0, faceCropCanvas.width, faceCropCanvas.height);
+        faceTexture.needsUpdate = true;
+      }
       
       // Keep the plane aspect ratio proportional to the cropped area.
       // 0.23 is roughly the height of the face inside the helmet in local units.
