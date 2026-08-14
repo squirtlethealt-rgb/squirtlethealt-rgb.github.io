@@ -231,7 +231,7 @@ const DEFAULT_FLIP = true;
 // VIRTUAL_ZOOM scales down the entire avatar (both the 2D face cutout and the 
 // 3D suit) on the screen so it doesn't take up the entire view when the user 
 // holds the camera close to their face.
-const VIRTUAL_ZOOM = 0.65;
+const VIRTUAL_ZOOM = 0.75;
 
 const POSE_X_SIGN = 1;
 const POSE_Y_SIGN = -1;
@@ -687,9 +687,8 @@ function loadSuit(){
       
       // Position the face card slightly forward (and up) from the neck
       // joint. 0.18 units forward clears the suit's interior meshes; the Y
-      // offset was raised from 0.08 to 0.14 to lift the face higher in the
-      // visor opening (the chin was getting cropped at the bottom before).
-      faceCardMesh.position.set(0, 0.14, 0.18);
+      // offset was lowered from 0.14 to 0.11 to show more hair at the top.
+      faceCardMesh.position.set(0, 0.11, 0.18);
       faceCardMesh.visible = helmetRemoved;
       faceCardMesh.renderOrder = 10; // draw after the stencil mask (renderOrder 5) so the test applies
       
