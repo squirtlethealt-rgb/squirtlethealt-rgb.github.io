@@ -99,15 +99,44 @@
   .text-overlay .line1{font-family:'Orbitron',sans-serif;font-weight:700;font-size:clamp(10px,2.8vw,16px);color:var(--saffron);text-align:center;text-shadow:0 1px 8px rgba(0,0,0,0.8);letter-spacing:1px;text-transform:uppercase;padding:0 24px;}
   .text-overlay .line2{font-family:'Outfit',sans-serif;font-weight:600;font-size:clamp(12px,3.2vw,18px);color:#00d2ff;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,0.9);padding:0 24px;}
   .text-overlay .line2 em{font-style:normal;color:var(--saffron);font-weight:600;}
+  
+  .bg-selector {
+    position: absolute;
+    left: 20px;
+    top: calc(env(safe-area-inset-top, 0px) + 90px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 10;
+  }
+  .bg-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4);
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .bg-thumb.active {
+    border-color: var(--saffron);
+    transform: scale(1.1);
+  }
 </style>
 </head>
 <body>
 
 <div class="stage" id="stage">
   <div class="bg-layer" id="bgLayer"><img src="bg.jpg.jpeg" alt="" id="bgImg"></div>
+  <div class="bg-selector" id="bgSelector">
+    <div class="bg-thumb active" data-src="bg.jpg.jpeg" style="background-image:url('bg.jpg.jpeg')"></div>
+    <div class="bg-thumb" data-src="Mangalyan.png" style="background-image:url('Mangalyan.png')"></div>
+    <div class="bg-thumb" data-src="Chandrayan.png" style="background-image:url('Chandrayan.png')"></div>
+  </div>
   <video id="video" playsinline webkit-playsinline autoplay muted></video>
   <canvas class="gl" id="glCanvas"></canvas>
-  <canvas class="dots" id="dotsCanvas"></canvas>
 
   <div class="status-dot" id="statusDot"></div>
 
@@ -125,12 +154,6 @@
       </g>
     </svg>
     <div class="top-actions">
-      <button class="icon-btn active" id="flipBtn" aria-label="flip">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-      </button>
-      <button class="icon-btn active" id="dotsBtn" aria-label="tracking marks">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="1.6"/><circle cx="12" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/><circle cx="6" cy="18" r="1.6"/><circle cx="12" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg>
-      </button>
       <button class="icon-btn" id="settingsBtn" aria-label="settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -243,8 +266,6 @@ const HAND_Z_SIGN = -1;
 
 const video = document.getElementById('video');
 const glCanvas = document.getElementById('glCanvas');
-const dotsCanvas = document.getElementById('dotsCanvas');
-const dotsCtx = dotsCanvas.getContext('2d');
 const statusEl = document.getElementById('status');
 const startBtn = document.getElementById('startBtn');
 const errMsg = document.getElementById('errMsg');
@@ -252,8 +273,6 @@ const statusDot = document.getElementById('statusDot');
 const snapBtn = document.getElementById('snapBtn');
 const thumb = document.getElementById('thumb');
 const thumbImg = document.getElementById('thumbImg');
-const flipBtn = document.getElementById('flipBtn');
-const dotsBtn = document.getElementById('dotsBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const helmetBtn = document.getElementById('helmetBtn');
 const recalBtn = document.getElementById('recalBtn');
@@ -266,9 +285,7 @@ const rDepth = document.getElementById('rDepth');
 const rHeight = document.getElementById('rHeight');
 const rTilt = document.getElementById('rTilt');
 
-let showDots = true;
 let poseRetargetEnabled = true;
-let flip180 = DEFAULT_FLIP;
 let envEnabled = true;
 
 // Visor open/close: We use a 3D face card (plane) placed inside the helmet 
@@ -952,29 +969,16 @@ async function loop(){
   requestAnimationFrame(loop);
 }
 
-function drawTrackingDots(){
-  dotsCtx.clearRect(0,0,dotsCanvas.width, dotsCanvas.height);
-  if(!showDots) return;
-
-  if(lastFaceLandmarks){
-    dotsCtx.save();
-    dotsCtx.translate(dotsCanvas.width / 2, dotsCanvas.height / 2);
-    dotsCtx.scale(VIRTUAL_ZOOM, VIRTUAL_ZOOM);
-    dotsCtx.translate(-dotsCanvas.width / 2, -dotsCanvas.height / 2);
-    
-    dotsCtx.fillStyle = '#FF9933';
-    for(const idx of MARK_POINTS){
-      const lm = lastFaceLandmarks[idx];
-      if(!lm) continue;
-      const x = lm.x * dotsCanvas.width;
-      const y = lm.y * dotsCanvas.height;
-      dotsCtx.beginPath();
-      dotsCtx.arc(x, y, 3, 0, Math.PI*2);
-      dotsCtx.fill();
-    }
-    dotsCtx.restore();
-  }
-}
+// Background Selection Logic
+const bgThumbs = document.querySelectorAll('.bg-thumb');
+const bgImg = document.getElementById('bgImg');
+bgThumbs.forEach(btn => {
+  btn.addEventListener('click', () => {
+    bgThumbs.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    bgImg.src = btn.getAttribute('data-src');
+  });
+});
 
 // Capture now grabs the rendered glCanvas only -- the face cutout is
 // already rendered into glCanvas as part of the Three.js scene (the
@@ -1049,16 +1053,7 @@ snapBtn.addEventListener('click', ()=>{
 recalBtn.addEventListener('click', ()=>{
   smoothedScale = null;
   smoothedStretch = {};
-});
-
-flipBtn.addEventListener('click', ()=>{
-  flip180 = !flip180;
-  flipBtn.classList.toggle('active', flip180);
-});
-
-dotsBtn.addEventListener('click', ()=>{
-  showDots = !showDots;
-  dotsBtn.classList.toggle('active', showDots);
+  recalBtn.classList.remove('spinning');
 });
 
 envBtn.addEventListener('click', ()=>{
