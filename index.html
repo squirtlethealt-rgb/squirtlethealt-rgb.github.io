@@ -94,10 +94,10 @@
   .err-msg.show{display:block;}
 
   /* --- Text overlay (visible during AR session) --- */
-  .text-overlay{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 64px);z-index:10;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;opacity:0;transition:opacity .5s;}
+  .text-overlay{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 24px);z-index:10;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;opacity:0;transition:opacity .5s;}
   .text-overlay.visible{opacity:1;}
-  .text-overlay .line1{font-family:'Orbitron',sans-serif;font-weight:700;font-size:clamp(11px,3.2vw,18px);color:var(--saffron);text-align:center;text-shadow:0 1px 8px rgba(0,0,0,0.8);letter-spacing:1.5px;text-transform:uppercase;padding:0 16px;}
-  .text-overlay .line2{font-family:'Outfit',sans-serif;font-weight:400;font-size:clamp(13px,3.8vw,20px);color:#fff;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,0.8);padding:0 16px;}
+  .text-overlay .line1{font-family:'Orbitron',sans-serif;font-weight:700;font-size:clamp(10px,2.8vw,16px);color:var(--saffron);text-align:center;text-shadow:0 1px 8px rgba(0,0,0,0.8);letter-spacing:1px;text-transform:uppercase;padding:0 24px;}
+  .text-overlay .line2{font-family:'Outfit',sans-serif;font-weight:600;font-size:clamp(12px,3.2vw,18px);color:#00d2ff;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,0.9);padding:0 24px;}
   .text-overlay .line2 em{font-style:normal;color:var(--saffron);font-weight:600;}
 </style>
 </head>
@@ -1011,18 +1011,18 @@ snapBtn.addEventListener('click', ()=>{
   sctx.scale(-1, 1);
   sctx.drawImage(glCanvas, 0, 0, shot.width, shot.height);
   sctx.restore();
-
+  
   // Burn the text overlay into the capture so it shows in the saved image.
   const tw = shot.width;
   const th = shot.height;
-  const fontSize1 = Math.max(14, Math.round(tw * 0.028));
-  const fontSize2 = Math.max(16, Math.round(tw * 0.034));
-  const topOffset = Math.round(th * 0.12);
+  const fontSize1 = Math.max(12, Math.round(tw * 0.024));
+  const fontSize2 = Math.max(14, Math.round(tw * 0.030));
+  const topOffset = Math.round(th * 0.06); // Moved higher up to match CSS
 
   sctx.textAlign = 'center';
   sctx.textBaseline = 'top';
-  sctx.shadowColor = 'rgba(0,0,0,0.85)';
-  sctx.shadowBlur = 10;
+  sctx.shadowColor = 'rgba(0,0,0,0.9)';
+  sctx.shadowBlur = 12;
 
   // Line 1: anniversary
   sctx.font = `700 ${fontSize1}px Orbitron, sans-serif`;
@@ -1030,8 +1030,8 @@ snapBtn.addEventListener('click', ()=>{
   sctx.fillText('Celebrating National Space Day With SKY EXPLORER 🚀', tw/2, topOffset);
 
   // Line 2: vyomnaut name
-  sctx.font = `400 ${fontSize2}px Outfit, sans-serif`;
-  sctx.fillStyle = '#ffffff';
+  sctx.font = `600 ${fontSize2}px Outfit, sans-serif`;
+  sctx.fillStyle = '#00d2ff'; // High visibility cyan instead of white
   sctx.fillText(`I am ${userName}, a future VYOMNAUT`, tw/2, topOffset + fontSize1 + 8);
   sctx.shadowBlur = 0;
 
