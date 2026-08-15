@@ -844,7 +844,7 @@ function updatePlacementAndPose(){
   const baseScale = 0.45;
   // Apply VIRTUAL_ZOOM to shrink the 3D suit in sync with the 2D face cutout
   const finalScale = baseScale * SCALE_BOOST * fine * METERS_TO_SCENE_UNITS * VIRTUAL_ZOOM;
-  const flipYaw = flip180 ? Math.PI : 0;
+  const flipYaw = DEFAULT_FLIP ? Math.PI : 0;
   const calib = new THREE.Matrix4();
   calib.compose(
     new THREE.Vector3(0, height, depth),
