@@ -371,10 +371,6 @@ launchBtn.addEventListener('click', () => {
   startCamera();
 });
 
-function setViewfinderAspect(w, h){
-  dotsCanvas.width = w;
-  dotsCanvas.height = h;
-}
 
 startBtn.addEventListener('click', ()=>{
   if(cameraStarted) return;
@@ -397,7 +393,6 @@ async function startCamera(){
     video.srcObject = stream;
     await new Promise(res=> video.onloadedmetadata = res);
     await video.play();
-    setViewfinderAspect(video.videoWidth, video.videoHeight);
     initThree();
     await Promise.all([loadTracking(), loadSuit()]);
 
