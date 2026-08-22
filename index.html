@@ -187,7 +187,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </div>
       </div>
-      <h1>Gaganyatri Lens<span>Celebrating National Space Day With Sky Explorer — 15 August 2026</span></h1>
+      <h1>Gaganyatri Lens<span>Celebrating National Space Day With THE Sky Explorer — 15 August 2026</span></h1>
       <div class="name-input-wrap">
         <input type="text" id="nameInput" placeholder="Enter your name" autocomplete="off" maxlength="30">
       </div>
@@ -382,11 +382,32 @@ startBtn.addEventListener('click', ()=>{
 async function startCamera(){
   try{
     const isMobile = window.innerWidth < window.innerHeight;
+    // --- Cross-platform full-frame fix (this is the "Mac crops the image"
+    // fix) ---
+    // The video/canvas are displayed with object-fit:cover, which always
+    // fills the screen by CROPPING whichever edge doesn't match the
+    // viewport's aspect ratio. Windows/Android webcams tend to actually
+    // stream close to whatever ideal width/height was requested, so a fixed
+    // "720x1280 portrait or 1280x720 landscape" request happens to roughly
+    // match those screens and the crop is barely noticeable. macOS
+    // (FaceTime HD / Continuity Camera) webcams instead tend to snap to
+    // their own fixed native modes and largely ignore width/height as a
+    // strict target, so the fixed request above often comes back in a
+    // noticeably different aspect ratio than the actual browser window --
+    // and object-fit:cover then has to crop away a lot more of the frame to
+    // fill the screen, which reads as "it doesn't give me the full image".
+    // Fix: ask for the *actual* viewport aspect ratio explicitly via the
+    // `aspectRatio` constraint (in addition to width/height), so whatever
+    // resolution the camera actually picks is already shaped to match the
+    // screen -- minimizing how much object-fit:cover needs to crop, on any
+    // platform.
+    const viewportAspect = window.innerWidth / window.innerHeight;
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'user',
         width: { ideal: isMobile ? 720 : 1280 },
-        height: { ideal: isMobile ? 1280 : 720 }
+        height: { ideal: isMobile ? 1280 : 720 },
+        aspectRatio: { ideal: viewportAspect }
       },
       audio: false
     });
@@ -641,7 +662,8 @@ function loadSuit(){
 
       // Cache the base rotations after setting the A-pose so the procedural animation
       // can oscillate around them.
-      for (const name of ['LeftShoulder','RightShoulder','LeftArm','RightArm','LeftForeArm','RightForeArm','LeftHand','RightHand']) {
+      for (const name of ['LeftShoulder','RightShoulder','LeftArm','RightArm','LeftForeArm','RightForeArm','LeftHand','RightHand',
+                          'RightHandIndex1','RightHandIndex2','RightHandIndex3','RightHandIndex4']) {
         if (bones[name]) {
           bones[name].userData.baseQuat = bones[name].quaternion.clone();
         }
@@ -732,15 +754,90 @@ function enableDragFallback(){
   window.addEventListener('pointerup', ()=> dragging = false);
 }
 
-function updateZeroGAnimation(timeSec) {
+// ============================================================================
+// POSE CYCLE ANIMATION -- replaces the old "zero-G float" idle.
+// The RIGHT arm cycles through three named gestures (Salute, Wave, Thumbs-up),
+// each held for a few seconds and separated by short blended transitions and
+// a brief "rest" (arm relaxed at the side). The LEFT arm keeps a gentle idle
+// float throughout so the suit never looks fully frozen.
+//
+// All joint angles below were derived by loading this exact GLB's skeleton
+// and solving (via forward kinematics, not guesswork) for the right combo of
+// shoulder/elbow rotation that brings the hand up WITHOUT reaching in front
+// of the visor -- that's the "hands shouldn't come in the way of camera feed"
+// requirement. Each pose keeps the hand within ~5-20cm of head depth (Z),
+// off to the side, so the real face showing through the visor is never
+// visually blocked by the 3D arm.
+//
+// Bone-local axis convention on this rig (confirmed via FK, not assumed):
+//   Arm/ForeArm local X = raise/curl (negative = lift the limb up)
+//   Arm local Z          = swing forward(+)/backward(-)
+//   Y                     = twist/roll along the bone (no positional effect)
+// ============================================================================
+
+const REST_POSE = {}; // empty offsets = bone sits at its bind-pose baseQuat
+
+const SALUTE_POSE = {
+  RightArm:      [-1.40, 0, 0.85],
+  RightForeArm:  [-2.20, 0, 0],
+  // Flat hand for the salute -- fingers stay together, no curl.
+};
+
+const WAVE_POSE = {
+  RightArm:      [-1.45, 0, 0.40],
+  RightForeArm:  [-1.60, 0, 0],
+};
+
+const THUMBS_UP_POSE = {
+  RightArm:      [-0.30, 0, 0.40],
+  RightForeArm:  [-1.20, 0, 0],
+  // Curl the glove's index chain into a loose fist. This suit's rig only has
+  // one simplified finger chain per hand (mitten-style glove, no separate
+  // thumb bone), so "thumbs up" reads mainly through the arm gesture + the
+  // curled fist silhouette rather than a literal raised thumb.
+  // If the curl looks inverted (fingers splaying out instead of curling in),
+  // flip the sign on these X values.
+  RightHandIndex1: [-0.55, 0, 0],
+  RightHandIndex2: [-0.75, 0, 0],
+  RightHandIndex3: [-0.65, 0, 0],
+  RightHandIndex4: [-0.35, 0, 0],
+};
+
+// Order poses play in, each with how long (seconds) to HOLD once reached.
+// A transition of POSE_TRANSITION_SEC blends in right before each hold.
+const POSE_SEQUENCE = [
+  { name: 'rest',      pose: REST_POSE,      hold: 1.2 },
+  { name: 'salute',    pose: SALUTE_POSE,    hold: 3.0 },
+  { name: 'rest',      pose: REST_POSE,      hold: 1.0 },
+  { name: 'wave',      pose: WAVE_POSE,      hold: 3.0 },
+  { name: 'rest',      pose: REST_POSE,      hold: 1.0 },
+  { name: 'thumbsUp',  pose: THUMBS_UP_POSE, hold: 3.0 },
+];
+const POSE_TRANSITION_SEC = 0.8;
+const POSE_BONES = ['RightArm','RightForeArm','RightHand','RightHandIndex1','RightHandIndex2','RightHandIndex3','RightHandIndex4'];
+
+const POSE_CYCLE_TOTAL = POSE_SEQUENCE.reduce((s, seg) => s + seg.hold + POSE_TRANSITION_SEC, 0);
+
+function smoothstep(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
+
+function eulerQuat(arr) {
+  if (!arr) return null;
+  return new THREE.Quaternion().setFromEuler(new THREE.Euler(arr[0], arr[1], arr[2]));
+}
+
+const _poseQFrom = new THREE.Quaternion();
+const _poseQTo = new THREE.Quaternion();
+const _poseQResult = new THREE.Quaternion();
+
+function updatePoseCycleAnimation(timeSec) {
   if (!bonesReady) return;
 
-  // Gentle full-body bob (very subtle translation)
+  // Gentle full-body bob (very subtle translation) -- unchanged.
   if (bones['Hips']) {
-    bones['Hips'].position.y = Math.sin(timeSec * 1.5) * 0.015; 
+    bones['Hips'].position.y = Math.sin(timeSec * 1.5) * 0.015;
   }
 
-  // Left Arm Float
+  // --- LEFT arm: keep the original idle float, always ---
   if (bones['LeftArm'] && bones['LeftArm'].userData.baseQuat) {
     const q = bones['LeftArm'].userData.baseQuat.clone();
     const swingZ = Math.sin(timeSec * 1.2) * 0.08;
@@ -749,17 +846,13 @@ function updateZeroGAnimation(timeSec) {
     bones['LeftArm'].quaternion.copy(q);
     bones['LeftArm'].updateWorldMatrix(true, false);
   }
-
-  // Left ForeArm (bend)
   if (bones['LeftForeArm'] && bones['LeftForeArm'].userData.baseQuat) {
     const q = bones['LeftForeArm'].userData.baseQuat.clone();
-    const bend = (Math.sin(timeSec * 1.5 + 1) * 0.5 + 0.5) * 0.15; // 0 to 0.15 rad
+    const bend = (Math.sin(timeSec * 1.5 + 1) * 0.5 + 0.5) * 0.15;
     q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bend, 0)));
     bones['LeftForeArm'].quaternion.copy(q);
     bones['LeftForeArm'].updateWorldMatrix(true, false);
   }
-
-  // Left Hand (wrist float)
   if (bones['LeftHand'] && bones['LeftHand'].userData.baseQuat) {
     const q = bones['LeftHand'].userData.baseQuat.clone();
     const wristRoll = Math.sin(timeSec * 2.1) * 0.1;
@@ -768,32 +861,60 @@ function updateZeroGAnimation(timeSec) {
     bones['LeftHand'].updateWorldMatrix(true, false);
   }
 
-  // Right Arm Float (offset phase)
-  if (bones['RightArm'] && bones['RightArm'].userData.baseQuat) {
-    const q = bones['RightArm'].userData.baseQuat.clone();
-    const swingZ = Math.sin(timeSec * 1.3 + Math.PI) * 0.08; 
-    const swingX = Math.cos(timeSec * 1.0 + Math.PI) * 0.05;
-    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(swingX, 0, swingZ)));
-    bones['RightArm'].quaternion.copy(q);
-    bones['RightArm'].updateWorldMatrix(true, false);
+  // --- RIGHT arm: walk the pose cycle ---
+  let t = timeSec % POSE_CYCLE_TOTAL;
+  let segIdx = 0;
+  let fromPose = POSE_SEQUENCE[POSE_SEQUENCE.length - 1].pose;
+  let fromName = POSE_SEQUENCE[POSE_SEQUENCE.length - 1].name;
+  let blend = 1;
+  let currentName = POSE_SEQUENCE[0].name;
+  for (let i = 0; i < POSE_SEQUENCE.length; i++) {
+    const seg = POSE_SEQUENCE[i];
+    const slotDur = POSE_TRANSITION_SEC + seg.hold;
+    if (t < slotDur) {
+      segIdx = i;
+      currentName = seg.name;
+      if (t < POSE_TRANSITION_SEC) {
+        blend = smoothstep(t / POSE_TRANSITION_SEC);
+      } else {
+        blend = 1;
+      }
+      break;
+    }
+    t -= slotDur;
+    fromPose = seg.pose;
+    fromName = seg.name;
   }
+  const toSeg = POSE_SEQUENCE[segIdx];
+  const toPose = toSeg.pose;
 
-  // Right ForeArm (bend)
-  if (bones['RightForeArm'] && bones['RightForeArm'].userData.baseQuat) {
-    const q = bones['RightForeArm'].userData.baseQuat.clone();
-    const bend = (Math.sin(timeSec * 1.4 + 2) * 0.5 + 0.5) * 0.15;
-    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -bend, 0)));
-    bones['RightForeArm'].quaternion.copy(q);
-    bones['RightForeArm'].updateWorldMatrix(true, false);
-  }
+  for (const boneName of POSE_BONES) {
+    const bone = bones[boneName];
+    if (!bone || !bone.userData.baseQuat) continue;
+    const base = bone.userData.baseQuat;
 
-  // Right Hand (wrist float)
-  if (bones['RightHand'] && bones['RightHand'].userData.baseQuat) {
-    const q = bones['RightHand'].userData.baseQuat.clone();
-    const wristRoll = Math.sin(timeSec * 2.0 + 1) * 0.1;
-    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-wristRoll, 0, 0)));
-    bones['RightHand'].quaternion.copy(q);
-    bones['RightHand'].updateWorldMatrix(true, false);
+    const fromOff = eulerQuat(fromPose[boneName]);
+    const toOff = eulerQuat(toPose[boneName]);
+
+    _poseQFrom.copy(base);
+    if (fromOff) _poseQFrom.multiply(fromOff);
+    _poseQTo.copy(base);
+    if (toOff) _poseQTo.multiply(toOff);
+
+    _poseQResult.copy(_poseQFrom).slerp(_poseQTo, blend);
+
+    // While fully in the WAVE hold, layer a side-to-side waving motion on
+    // top of the held pose (forearm swings, wrist sways) -- this is what
+    // actually reads as "waving" rather than just "arm raised".
+    if (currentName === 'wave' && blend >= 1 && (boneName === 'RightForeArm' || boneName === 'RightHand')) {
+      const waveAmt = boneName === 'RightForeArm' ? 0.30 : 0.22;
+      const waveSpeed = boneName === 'RightForeArm' ? 3.2 : 3.2;
+      const wave = Math.sin(timeSec * waveSpeed) * waveAmt;
+      _poseQResult.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, wave)));
+    }
+
+    bone.quaternion.copy(_poseQResult);
+    bone.updateWorldMatrix(true, false);
   }
 }
 
@@ -943,7 +1064,7 @@ function updatePlacementAndPose(){
     }
   }
 
-  updateZeroGAnimation(performance.now() / 1000);
+  updatePoseCycleAnimation(performance.now() / 1000);
 }
 
 async function loop(){
@@ -1026,7 +1147,7 @@ snapBtn.addEventListener('click', ()=>{
   // Line 1: anniversary
   sctx.font = `700 ${fontSize1}px Orbitron, sans-serif`;
   sctx.fillStyle = '#FF9933';
-  sctx.fillText('Celebrating National Space Day With SKY EXPLORER 🚀', tw/2, topOffset);
+  sctx.fillText('Celebrating National Space Day With THE SKY EXPLORER 🚀', tw/2, topOffset);
 
   // Line 2: vyomnaut name
   sctx.font = `600 ${fontSize2}px Outfit, sans-serif`;
