@@ -1,0 +1,2449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sky Explorers Unified LMS — Chunky Cartoon Candy UI</title>
+  
+  <!-- Design System CSS -->
+  <link rel="stylesheet" href="design-system.css">
+  
+  <!-- Tailwind CSS for structural grid & utility alignment -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Pyodide WASM CDN for Client-Side In-Browser Python Execution (REQ-PY-01) -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js" async></script>
+</head>
+<body class="relative flex flex-col justify-between">
+
+  <!-- ========================================================================
+       1. AMBIENT ATMOSPHERIC BACKDROP (Non-interactive blur canopy)
+       ======================================================================== -->
+  <div class="ambient-glow-wrapper" aria-hidden="true">
+    <div class="ambient-fog-layer"></div>
+    <div class="ambient-orb w-[420px] h-[420px] bg-[#4ade80] -top-16 -left-16 opacity-45"></div>
+    <div class="ambient-orb w-[380px] h-[380px] bg-[#4f46e5] -top-10 -right-10 opacity-35"></div>
+    <div class="ambient-orb w-[540px] h-[540px] bg-[#22c55e] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-25"></div>
+    <div class="ambient-orb w-[460px] h-[460px] bg-[#f59e0b] -bottom-20 left-[30%] opacity-40"></div>
+    <div class="ambient-orb w-[360px] h-[360px] bg-[#c026d3] -bottom-16 right-[10%] opacity-35"></div>
+  </div>
+
+  <!-- ========================================================================
+       2. TOP BAR & HUD (Flat Chunky Candy Style)
+       ======================================================================== -->
+  <header class="relative z-30 w-full px-4 md:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4 border-b-[3.5px] border-[#18202d] bg-[#ffffff] shadow-[0_4px_0_rgba(24,32,45,0.95)]">
+    
+    <!-- Brand / Title -->
+    <div class="flex items-center gap-3 cursor-pointer" onclick="navigateTo('dashboard')">
+      <div class="w-11 h-11 rounded-xl bg-[#299bf5] border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex items-center justify-center flex-shrink-0 asset-box">
+        <img src="assets/PNG/rocket.png" class="asset-img" alt="Sky Explorers Rocket">
+      </div>
+      <div>
+        <h1 class="font-display text-2xl md:text-3xl text-[#18202d] leading-none tracking-wide">
+          SKY EXPLORERS
+        </h1>
+        <p class="font-body text-xs font-black text-[#64748b] tracking-wider uppercase">
+          Unified LMS • Python & Data Science
+        </p>
+      </div>
+    </div>
+
+    <!-- Student Currency & Progress HUD -->
+    <div class="flex items-center gap-3 flex-wrap">
+      
+      <!-- Coin Pill -->
+      <div class="currency-pill">
+        <div class="flex items-center gap-2">
+          <div class="asset-box w-8 h-8 flex-shrink-0">
+            <img src="assets/PNG/coin.png" class="asset-img" alt="Coins">
+          </div>
+          <span id="hudCoinsAmount" class="font-display text-xl md:text-2xl text-[#18202d]">
+            0
+          </span>
+        </div>
+        <button onclick="addCurrency('coins', 100)" class="chunky-btn w-8 h-8 bg-[#f97316] text-white text-xl p-0 rounded-lg flex items-center justify-center font-display" title="Earn +100 Coins">
+          +
+        </button>
+      </div>
+
+      <!-- Gem Pill -->
+      <div class="currency-pill">
+        <div class="flex items-center gap-2">
+          <div class="asset-box w-8 h-8 flex-shrink-0">
+            <img src="assets/PNG/gems.png" class="asset-img" alt="Gems">
+          </div>
+          <span id="hudGemsAmount" class="font-display text-xl md:text-2xl text-[#18202d]">
+            0
+          </span>
+        </div>
+        <button onclick="addCurrency('gems', 10)" class="chunky-btn w-8 h-8 bg-[#c026d3] text-white text-xl p-0 rounded-lg flex items-center justify-center font-display" title="Earn +10 Gems">
+          +
+        </button>
+      </div>
+
+      <!-- Streak Pill -->
+      <div class="hud-badge bg-[#fef08a] border-[2.8px] border-[#18202d] rounded-xl px-3 py-2 text-sm font-display flex items-center gap-1.5 shadow-[0_2.5px_0_#18202d]">
+        <span>🔥</span>
+        <span>1 DAY STREAK</span>
+      </div>
+
+      <!-- Mystery Build Shards Pill -->
+      <div class="hud-badge bg-[#e0e7ff] border-[2.8px] border-[#18202d] rounded-xl px-3 py-2 text-sm font-display flex items-center gap-1.5 shadow-[0_2.5px_0_#18202d]">
+        <div class="asset-box w-5 h-5 flex-shrink-0">
+          <img src="assets/PNG/tiltrocket.png" class="asset-img" alt="Mystery Shard">
+        </div>
+        <span>MYSTERY: 0/26</span>
+      </div>
+
+    </div>
+
+    <!-- Role Switcher & Screen Navigation Group -->
+    <div class="flex items-center gap-2 bg-[#18202d] p-1.5 rounded-2xl border-[3px] border-[#18202d] shadow-[0_4px_0_rgba(24,32,45,0.95)]">
+      <button data-role="student" onclick="switchRole('student')" class="role-nav-btn chunky-tab active">
+        STUDENT
+      </button>
+      <button data-role="facilitator" onclick="switchRole('facilitator')" class="role-nav-btn chunky-tab">
+        FACILITATOR
+      </button>
+      <button data-role="parent" onclick="switchRole('parent')" class="role-nav-btn chunky-tab">
+        PARENT
+      </button>
+      <button data-role="admin" onclick="switchRole('admin')" class="role-nav-btn chunky-tab">
+        ADMIN / OPS
+      </button>
+      <button onclick="navigateTo('auth')" class="chunky-tab text-yellow-300">
+        🔐 AUTH (REQ-AUTH)
+      </button>
+      <button onclick="navigateTo('tokens')" class="chunky-tab text-amber-300 border-dashed border-amber-400">
+        🎨 DESIGN TOKENS
+      </button>
+    </div>
+
+  </header>
+
+  <!-- ========================================================================
+       STUDENT SUB-NAVIGATION (when active role is student)
+       ======================================================================== -->
+  <div class="relative z-20 w-full px-4 md:px-8 py-2.5 flex items-center justify-between gap-4 bg-[#f8fafc] border-b-[2.5px] border-[#18202d]">
+    <div class="flex items-center gap-3">
+      <button id="navTabDashboard" onclick="navigateTo('dashboard')" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+        🏠 DASHBOARD
+      </button>
+      <button id="navTabStudio" onclick="navigateTo('code-studio')" class="chunky-btn chunky-btn-sm chunky-btn-python">
+        💻 CODE STUDIO (REQ-PY)
+      </button>
+      <button id="navTabDataNotebook" onclick="navigateTo('data-notebook')" class="chunky-btn chunky-btn-sm chunky-btn-slate">
+        <div class="asset-box w-4 h-4 inline-block align-middle mr-1.5"><img src="assets/PNG/courseIdentity2.png" class="asset-img" alt="Data Science"></div> DATA NOTEBOOK (REQ-DS)
+      </button>
+      <button onclick="openSessionCompleteModal()" class="chunky-btn chunky-btn-sm chunky-btn-purple border-dashed border-[2px] border-[#fed034]" title="Developer QA: Trigger Session Complete Celebration Modal">
+        🧪 [DEV] REWARD MODAL
+      </button>
+    </div>
+    <div class="text-xs font-black text-[#475569] flex items-center gap-2">
+      <div class="asset-avatar-circle-sm"><img src="assets/PNG/av1.png" class="asset-img" alt="Arjun"></div>
+      <span>Logged in: <strong class="text-[#18202d]">Arjun P.</strong> (Oakridge Int., Grade 7)</span>
+      <span class="hud-badge bg-[#fed034] text-xs">CODE: COSMIC-FALCON</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       3. MAIN VIEW CONTAINER
+       ======================================================================== -->
+  <main class="relative z-10 max-w-7xl mx-auto w-full px-4 md:px-8 py-6 my-auto flex-1">
+
+    <!-- ======================================================================
+         SCREEN 1: STUDENT DASHBOARD
+         ====================================================================== -->
+    <section id="screen-dashboard" class="w-full space-y-6">
+      
+      <!-- Welcome Hero Banner -->
+      <div class="chunky-panel p-6 md:p-8 bg-[#fed034] border-[4px] border-[#18202d] shadow-[0_6px_0_#18202d] rounded-[24px] flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-5">
+          <div class="asset-mascot-box w-20 h-20 rounded-2xl bg-white border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex-shrink-0">
+            <img src="assets/PNG/idlesmile.png" class="asset-img" alt="Sky Explorers Mascot">
+          </div>
+          <div class="space-y-2">
+            <div class="inline-block px-3 py-1 bg-[#ffffff] border-[2.5px] border-[#18202d] rounded-xl text-xs font-display text-[#18202d] shadow-[0_2px_0_#18202d]">
+              MILESTONE 1 KICKOFF &bull; PYTHON SESSION 1 OF 30
+            </div>
+            <h2 class="text-3xl md:text-5xl font-display text-[#18202d] tracking-wide">
+              WELCOME, ARJUN!
+            </h2>
+            <p class="font-body font-bold text-base md:text-lg text-[#451a03] max-w-2xl">
+              This is your very first mission! Today you'll learn <strong>what a program is</strong>, the difference between <strong>data and algorithm</strong>, and write your first <strong>print()</strong> code. Let's go!
+            </p>
+          </div>
+        </div>
+        <div class="flex-shrink-0 flex flex-col sm:flex-row gap-3">
+          <button onclick="navigateTo('code-studio')" class="chunky-btn chunky-btn-lg chunky-btn-green">
+            LAUNCH SESSION 1 &#x25B6;
+          </button>
+        </div>
+      </div>
+
+      <!-- Course Cards Grid (Python vs Data Science) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Python Programming Course Card (Candy Blue Accent) -->
+        <div class="chunky-card-interactive p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-14 h-14 rounded-2xl bg-[#299bf5] border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex items-center justify-center flex-shrink-0 asset-box">
+                <img src="assets/PNG/Courseidentity1.png" class="asset-img" alt="Python Programming">
+              </div>
+              <div>
+                <span class="hud-badge bg-[#bae6fd] text-[#0369a1] text-xs">GRADE 6&ndash;12 CORE &bull; 30 SESSIONS</span>
+                <h3 class="font-display text-2xl md:text-3xl text-[#18202d] leading-tight">
+                  PYTHON PROGRAMMING
+                </h3>
+              </div>
+            </div>
+            <span class="font-display text-lg text-[#2563eb]">0%</span>
+          </div>
+
+          <p class="font-body text-sm text-[#475569] font-bold">
+            Start your journey: print(), variables, data types, input, debugging &mdash; and the continuous Mystery Build project.
+          </p>
+
+          <!-- Progress Bar -->
+          <div class="w-full bg-[#e2e8f0] h-5 rounded-full border-[2.8px] border-[#18202d] p-0.5 overflow-hidden">
+            <div class="bg-[#299bf5] h-full rounded-full border-r-[2px] border-[#18202d]" style="width: 3%;"></div>
+          </div>
+
+          <!-- Session Checklist (REQ-CRS-01) -->
+          <div class="space-y-2 pt-2">
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#eff6ff] border-[2.5px] border-[#18202d] shadow-[0_2px_0_#18202d]">
+              <span class="font-bold text-sm text-[#1d4ed8]">&#x25B6; Session 1: What a Program Is &amp; print()</span>
+              <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs animate-pulse">ACTIVE NOW</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#94a3b8] opacity-70">
+              <span class="font-bold text-sm text-[#64748b]">&#x1F512; Session 2: Variables, Data Types &amp; Operators</span>
+              <span class="hud-badge bg-[#cbd5e1] text-[#475569] text-xs">LOCKED BY FACILITATOR</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#94a3b8] opacity-70">
+              <span class="font-bold text-sm text-[#64748b]">&#x1F512; Session 3: input(), f-strings &amp; Indentation</span>
+              <span class="hud-badge bg-[#cbd5e1] text-[#475569] text-xs">LOCKED BY FACILITATOR</span>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button onclick="setStudioCourse('python'); navigateTo('code-studio');" class="chunky-btn w-full chunky-btn-python">
+              OPEN PYTHON STUDIO
+            </button>
+          </div>
+        </div>
+
+        <!-- Data Science Level 1 Course Card (Candy Green Accent) -->
+        <div class="chunky-card-interactive p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-14 h-14 rounded-2xl bg-[#6fc624] border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex items-center justify-center flex-shrink-0 asset-box">
+                <img src="assets/PNG/courseIdentity2.png" class="asset-img" alt="Data Science">
+              </div>
+              <div>
+                <span class="hud-badge bg-[#dcfce7] text-[#15803d] text-xs">LEVEL 1 APPLIED &bull; 12 CYCLES</span>
+                <h3 class="font-display text-2xl md:text-3xl text-[#18202d] leading-tight">
+                  DATA SCIENCE L1
+                </h3>
+              </div>
+            </div>
+            <span class="font-display text-lg text-[#16a34a]">0%</span>
+          </div>
+
+          <p class="font-body text-sm text-[#475569] font-bold">
+            Explore what data is, how it's collected and used &mdash; the foundation before datasets, Pandas and Cycle 12 showcase.
+          </p>
+
+          <!-- Progress Bar -->
+          <div class="w-full bg-[#e2e8f0] h-5 rounded-full border-[2.8px] border-[#18202d] p-0.5 overflow-hidden">
+            <div class="bg-[#6fc624] h-full rounded-full border-r-[2px] border-[#18202d]" style="width: 2%;"></div>
+          </div>
+
+          <!-- Cycle Checklist (REQ-DS-01) -->
+          <div class="space-y-2 pt-2">
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#f0fdf4] border-[2.5px] border-[#18202d] shadow-[0_2px_0_#18202d]">
+              <span class="font-bold text-sm text-[#15803d]">&#x25B6; Cycle 1: What is Data? Introduction &amp; Real Examples</span>
+              <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs animate-pulse">ACTIVE NOW</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#94a3b8] opacity-70">
+              <span class="font-bold text-sm text-[#64748b]">&#x1F512; Cycle 2: Dataset Cleaning &amp; Inspection</span>
+              <span class="hud-badge bg-[#cbd5e1] text-[#475569] text-xs">LOCKED</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#94a3b8] opacity-70">
+              <span class="font-bold text-sm text-[#64748b]">&#x1F512; Cycle 3: Exploratory Analysis with Pandas</span>
+              <span class="hud-badge bg-[#cbd5e1] text-[#475569] text-xs">LOCKED</span>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button onclick="navigateTo('data-notebook');" class="chunky-btn w-full chunky-btn-green">
+              OPEN DATA NOTEBOOK &#x25B6;
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Mystery Build Showcase & Badges Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Mystery Build Teaser (REQ-PY-04) -->
+        <div class="lg:col-span-2 chunky-panel p-6 bg-[#d5dfe6] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] flex flex-col sm:flex-row items-center gap-6">
+          <div class="w-32 h-32 flex-shrink-0 rounded-2xl bg-[#9333ea] border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex flex-col items-center justify-center p-2 text-center text-white">
+            <div class="asset-box w-16 h-16 mb-1">
+              <img src="assets/PNG/rocket.png" class="asset-img" alt="Mystery Build Rocket">
+            </div>
+            <span class="font-display text-xs">MYSTERY BUILD</span>
+          </div>
+          <div class="space-y-2 flex-1 text-center sm:text-left">
+            <div class="flex items-center justify-center sm:justify-start gap-2">
+              <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs">26-SESSION SAGA</span>
+              <span class="font-display text-sm text-[#475569]">SHARDS: 0 / 26</span>
+            </div>
+            <h4 class="font-display text-2xl text-[#18202d]">
+              ??? MYSTERY PROJECT — ASSEMBLING
+            </h4>
+            <p class="font-body font-bold text-xs text-[#334155]">
+              Every session unlocks one encrypted blueprint shard into your <code>Mystery_Build.py</code>. Complete Session 1 to reveal your very first Shard! What will you build?
+            </p>
+            <div class="pt-1">
+              <button onclick="openSessionCompleteModal()" class="chunky-btn chunky-btn-sm chunky-btn-purple">
+                PREVIEW SHARD REVEAL ✨
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Badges Showcase & Trophy Shelf (REQ-CRS-01) -->
+        <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="font-display text-xl text-[#18202d]">
+              UNLOCKED BADGES
+            </h4>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-body font-bold text-[#64748b]">0 Earned</span>
+              <button onclick="toggleBadgeEmptyState()" class="hud-badge bg-[#fef9c3] text-[#854d0e] border-dashed border-[2px] border-[#ca8a04] text-[10px] cursor-pointer" title="Developer QA: Toggle Empty Shelf View">
+                🧪 [DEV] Shelf
+              </button>
+            </div>
+          </div>
+
+          <!-- Unlocked Badges Row — hidden at start, shown via toggleBadgeEmptyState -->
+          <div id="badgeGridActive" class="space-y-3 hidden">
+            <div class="grid grid-cols-4 gap-2.5">
+              <!-- Badges will appear here after sessions are completed -->
+            </div>
+
+            <!-- Future Milestone Tier Medallions (B5 bronze, b6 silver, b7 gold, b8 diamond) -->
+            <div class="pt-1">
+              <span class="text-[10px] font-display text-[#64748b] uppercase tracking-wider block mb-1">
+                Upcoming Tier Medallions (Milestones 20–26)
+              </span>
+              <div class="grid grid-cols-4 gap-2 opacity-80">
+                <div class="asset-badge-slot bg-[#f8fafc] !w-12 !h-12" title="Bronze Tier (B5)">
+                  <img src="assets/PNG/B5.png" class="asset-img" alt="Bronze Tier">
+                </div>
+                <div class="asset-badge-slot bg-[#f8fafc] !w-12 !h-12" title="Silver Tier (b6)">
+                  <img src="assets/PNG/b6.png" class="asset-img" alt="Silver Tier">
+                </div>
+                <div class="asset-badge-slot bg-[#f8fafc] !w-12 !h-12" title="Gold Tier (b7)">
+                  <img src="assets/PNG/b7.png" class="asset-img" alt="Gold Tier">
+                </div>
+                <div class="asset-badge-slot bg-[#f8fafc] !w-12 !h-12" title="Diamond Tier (b8)">
+                  <img src="assets/PNG/b8.png" class="asset-img" alt="Diamond Tier">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty State: Zero Badges / Shelf (shelve.png) — shown by default at start -->
+          <div id="badgeEmptyShelfState" class="text-center py-2 space-y-2">
+            <div class="asset-illustration-box w-full max-w-[200px] h-24 mx-auto">
+              <img src="assets/PNG/shelve.png" class="asset-img" alt="Empty Trophy Shelf">
+            </div>
+            <p class="font-body text-xs font-bold text-[#64748b]">
+              Your trophy shelf is empty — complete Session 1 to unlock your very first "First Flight" badge! 🚀
+            </p>
+          </div>
+
+          <p class="font-body text-xs font-bold text-[#64748b] text-center pt-1">
+            First badge unlocks: Complete Session 1 → earn "First Flight" 🚀
+          </p>
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ======================================================================
+         SCREEN 2: NOTEBOOK & CODE STUDIO (REQ-PY & REQ-DS)
+         ====================================================================== -->
+    <section id="screen-code-studio" class="w-full space-y-4 hidden">
+      
+      <!-- Studio Header Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-[#ffffff] p-3.5 rounded-2xl border-[3px] border-[#18202d] shadow-[0_3.5px_0_#18202d]">
+        
+        <!-- Course and Mode Switcher -->
+        <div class="flex items-center gap-2">
+          <button id="studioCoursePython" onclick="setStudioCourse('python')" class="chunky-btn chunky-btn-sm chunky-btn-python">
+            <div class="asset-box w-4 h-4 inline-block align-middle mr-1.5"><img src="assets/PNG/Courseidentity1.png" class="asset-img" alt="Python"></div> PYTHON PROGRAMMING
+          </button>
+          <button id="studioCourseDS" onclick="navigateTo('data-notebook')" class="chunky-btn chunky-btn-sm chunky-btn-slate">
+            <div class="asset-box w-4 h-4 inline-block align-middle mr-1.5"><img src="assets/PNG/courseIdentity2.png" class="asset-img" alt="Data Science"></div> DATA SCIENCE NOTEBOOK
+          </button>
+        </div>
+
+        <!-- Scaffolding Milestone Selector (REQ-HINT-04) -->
+        <div class="flex items-center gap-2">
+          <span class="font-display text-xs text-[#475569]">SCAFFOLD:</span>
+          <div class="flex items-center gap-1 bg-[#18202d] p-1 rounded-xl">
+            <button data-milestone="m1_2" onclick="setScaffoldMilestone('m1_2')" class="scaffold-btn chunky-tab active !px-2.5 !py-1 !text-xs">
+              M1–2 (FULL)
+            </button>
+            <button data-milestone="m3_4" onclick="setScaffoldMilestone('m3_4')" class="scaffold-btn chunky-tab !px-2.5 !py-1 !text-xs">
+              M3–4 (REDUCED)
+            </button>
+            <button data-milestone="m5" onclick="setScaffoldMilestone('m5')" class="scaffold-btn chunky-tab !px-2.5 !py-1 !text-xs">
+              M5+ (SILENT)
+            </button>
+          </div>
+        </div>
+
+        <!-- Auto-save and Cloud State (REQ-PY-02 & 03) -->
+        <div class="flex items-center gap-2">
+          <span id="saveIndicatorText" class="hud-badge bg-[#f0fdf4] text-[#166534] border-[2px]">
+            🟢 Cloud Synced
+          </span>
+          <button onclick="triggerDeliberateSyntaxError()" class="chunky-btn chunky-btn-sm chunky-btn-orange border-dashed border-[2px] border-[#18202d]" title="Developer QA: Inject syntax error to preview Socratic hint callout">
+            🧪 [DEV] HINT
+          </button>
+          <button onclick="simulatePyodideLoad()" class="chunky-btn chunky-btn-sm bg-[#e2e8f0] text-[#334155] border-dashed border-[2px] border-[#18202d]" title="Developer QA: Preview Pyodide WASM first-load state (REQ-PY-01)">
+            🧪 [DEV] WASM LOAD
+          </button>
+        </div>
+
+      </div>
+
+      <!-- File Tabs (REQ-CRS-02: Exactly two files Activity & Homework, plus REQ-PY-04 Mystery Build) -->
+      <div class="flex items-center gap-2 pl-3">
+        <button data-tab="activity" onclick="switchFileTab('activity')" class="code-tab-btn active">
+          📄 Activity.py (In-Session)
+        </button>
+        <button data-tab="homework" onclick="switchFileTab('homework')" class="code-tab-btn">
+          📝 Homework.py (Task)
+        </button>
+        <button data-tab="mystery" onclick="switchFileTab('mystery')" class="code-tab-btn text-purple-700 bg-purple-100">
+          🔒 Mystery_Build.py (Accumulated)
+        </button>
+      </div>
+
+      <!-- CODE STUDIO CHUNKY FRAME -->
+      <div class="editor-frame">
+        
+        <!-- Run Controls Toolbar (SRS Section 7 & prompt: Large labeled buttons!) -->
+        <div class="editor-toolbar">
+          
+          <div class="flex items-center gap-3">
+            <!-- Giant Green Run Button -->
+            <button id="btnRunCode" onclick="executeCurrentCode()" class="chunky-btn chunky-btn-lg chunky-btn-green min-w-[140px]">
+              <span>▶ RUN</span>
+            </button>
+
+            <!-- Giant Red Stop Button -->
+            <button id="btnStopCode" onclick="stopExecution()" class="chunky-btn chunky-btn-lg chunky-btn-red min-w-[130px]" disabled>
+              <span>⏹ STOP</span>
+            </button>
+
+            <!-- Step Stepper (Phase 2 teaser per SRS §9) -->
+            <button class="chunky-btn chunky-btn-slate opacity-65 cursor-not-allowed" title="Step-through debugger is scheduled for Phase 2">
+              <span>⏯ STEP <small class="text-[10px] bg-black px-1.5 py-0.5 rounded text-amber-300 ml-1">PHASE 2</small></span>
+            </button>
+          </div>
+
+          <!-- Approved Snippet Inserter (REQ-PY-08: Clipboard blocked, internal Insert allowed) -->
+          <div class="flex items-center gap-3">
+            <button id="btnInsertSnippet" onclick="insertApprovedSnippet()" class="chunky-btn chunky-btn-sm chunky-btn-green" title="Approved lesson snippet inserter">
+              <span>📥 INSERT MISSION SNIPPET</span>
+            </button>
+            <div class="text-xs text-slate-300 font-bold hidden md:block">
+              ⌨️ Ctrl+V Blocked (Type to learn)
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Code Editor Surface (Split View: Code Above, Output Below per REQ-PY-06) -->
+        <div class="relative w-full flex flex-col">
+          
+          <!-- Pyodide WASM First-Load State Overlay (REQ-PY-01) -->
+          <div id="pyodideLoadingState" class="hidden absolute inset-0 z-30 bg-[#161b24] p-6 flex flex-col items-center justify-center text-center space-y-4">
+            <div class="asset-illustration-box w-20 h-20 mb-1">
+              <img src="assets/PNG/Courseidentity1.png" class="asset-img animate-bounce" alt="Booting Python Engine">
+            </div>
+            <div class="space-y-1">
+              <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs font-display">FIRST RUN INITIALIZATION</span>
+              <h3 class="font-display text-2xl md:text-3xl text-[#ffffff] tracking-wide">
+                PREPARING PYTHON FLIGHT ENGINE...
+              </h3>
+              <p class="font-body text-xs font-bold text-[#94a3b8] max-w-md mx-auto">
+                Downloading Python 3.11 WebAssembly environment &amp; mathematical packages (~12MB). Cached in browser for instant future loads (REQ-PY-01).
+              </p>
+            </div>
+            <!-- Chunky Progress Bar -->
+            <div class="w-full max-w-md bg-[#0f172a] h-6 rounded-full border-[3px] border-[#18202d] p-0.5 overflow-hidden shadow-[0_3px_0_#18202d]">
+              <div id="pyodideProgressBar" class="bg-[#22c55e] h-full rounded-full border-r-[2px] border-[#18202d] transition-all duration-300" style="width: 72%;"></div>
+            </div>
+            <!-- Loading steps checklist -->
+            <div class="font-body text-xs text-[#cbd5e1] space-y-1.5 max-w-sm w-full text-left bg-[#1e2430] p-3 rounded-xl border-[2px] border-[#334155]">
+              <div class="flex items-center justify-between text-[#86efac]">
+                <span>✓ Core Pyodide WASM Runtime</span>
+                <span class="font-bold">Loaded</span>
+              </div>
+              <div class="flex items-center justify-between text-[#86efac]">
+                <span>✓ Standard Library &amp; Builtins</span>
+                <span class="font-bold">Ready</span>
+              </div>
+              <div class="flex items-center justify-between text-[#fed034] animate-pulse">
+                <span>⏳ Telemetry &amp; Flight Coordinates Module</span>
+                <span id="pyodidePercentText" class="font-bold">72%</span>
+              </div>
+            </div>
+            <button onclick="closePyodideLoad()" class="chunky-btn chunky-btn-sm chunky-btn-green mt-2">
+              <span>DISMISS / READY ▶</span>
+            </button>
+          </div>
+          
+          <!-- Code Textarea & Line Gutter Container -->
+          <div class="relative flex w-full min-h-[340px] max-h-[460px] overflow-hidden bg-[#1e2430]">
+            
+            <!-- Line Number Gutter -->
+            <div id="codeGutter" class="w-12 bg-[#161b24] py-3 text-right pr-2 text-xs font-code text-[#64748b] select-none border-r-[2px] border-[#2d3748]">
+              <!-- Dynamically populated -->
+            </div>
+
+            <!-- Active Code Surface -->
+            <textarea id="codeEditorTextarea" spellcheck="false" class="editor-surface flex-1 p-3 bg-[#1e2430] text-[#f8fafc] resize-none outline-none font-code text-sm md:text-base leading-relaxed chunky-scroll" placeholder="Write Python code here..."></textarea>
+
+          </div>
+
+          <!-- ================================================================
+               SOCRATIC ERROR-HINT CALLOUT (REQ-HINT-01 ~ 05)
+               - Golden-ratio proportion relative to editor pane (~1:1.618)
+               - Chunky candy styling (ink border, hard offset shadow)
+               - Restrained semantic palette (warm golden parchment + soft indigo/amber)
+                 distinct from flat green/red buttons!
+               - Socratic question (never reveals bug or fix directly)
+               ================================================================ -->
+          <div id="socraticHintCallout" class="hidden absolute top-8 right-6 z-40">
+            <div class="socratic-hint-card">
+              
+              <!-- Callout Header -->
+              <div class="flex items-center justify-between pb-2 border-b-[2px] border-[#18202d] mb-2">
+                <div class="flex items-center gap-2">
+                  <div id="socraticHintMascotBox" class="asset-mascot-box w-9 h-9 flex-shrink-0">
+                    <img id="socraticMascotImg" src="assets/PNG/pointleft.png" class="asset-img" alt="Socratic Guide Mascot">
+                  </div>
+                  <span class="font-display text-lg text-[#92400e]">
+                    SOCRATIC INQUIRY
+                  </span>
+                  <span id="socraticMilestoneTag" class="socratic-badge">
+                    Milestone 1–2: Full Scaffold
+                  </span>
+                </div>
+                <button onclick="dismissSocraticHint()" class="chunky-btn chunky-btn-sm chunky-btn-red !w-7 !h-7 !p-0 rounded-lg" title="Dismiss hint">
+                  ✕
+                </button>
+              </div>
+
+              <!-- Socratic Question Body -->
+              <div class="space-y-2">
+                <p id="socraticQuestionText" class="font-body font-bold text-sm md:text-base text-[#1e293b] leading-relaxed">
+                  Look at your print() statement: what must always appear inside the parentheses for Python to display text on screen? What happens if you remove the quotation marks?
+                </p>
+                <div class="bg-[#fef3c7] p-2.5 rounded-xl border-[2px] border-[#18202d] text-xs font-bold text-[#78350f] flex items-center gap-2">
+                  <span>💡</span>
+                  <span>Rule: Run your code and inspect line numbers before the assistant reveals next questions.</span>
+                </div>
+              </div>
+
+              <!-- Callout Action Row -->
+              <div class="pt-3 flex justify-end gap-2">
+                <button onclick="dismissSocraticHint()" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+                  I'LL CHECK MY CODE 🔍
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Fixed Output Console (REQ-PY-06: Output only, no command typing) -->
+          <div class="border-t-[3.5px] border-[#18202d] bg-[#0f172a] text-[#f8fafc] p-4 font-code text-sm">
+            <div class="flex items-center justify-between pb-2 border-b border-[#334155] mb-2">
+              <div class="flex items-center gap-2 font-display text-xs text-[#94a3b8] tracking-wider uppercase">
+                <span>🖥️ FLIGHT TELEMETRY OUTPUT</span>
+                <span class="text-[10px] text-[#818cf8]">(Client-Side Pyodide WASM)</span>
+              </div>
+              <button onclick="document.getElementById('consoleOutputText').innerText = 'Output cleared.';" class="text-xs font-bold text-[#64748b] hover:text-[#94a3b8]">
+                Clear Output
+              </button>
+            </div>
+            
+            <pre id="consoleOutputText" class="min-h-[90px] max-h-[160px] overflow-y-auto whitespace-pre-wrap font-code leading-relaxed text-[#818cf8]">
+🚀 Sky Explorers Virtual Flight Console Initialized.
+Press "RUN" above to execute client-side Python telemetry code.
+            </pre>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ======================================================================
+         SCREEN 2B: DATA SCIENCE NOTEBOOK (REQ-DS-01 ~ REQ-DS-04)
+         Distinct cell-based visual pattern: discrete chunky blocks, pinned outputs,
+         local run controls, DataFrame table, and chart visualization.
+         ====================================================================== -->
+    <section id="screen-data-notebook" class="w-full space-y-5 hidden">
+      
+      <!-- Notebook Top Header Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-[#ffffff] p-4 rounded-2xl border-[3.5px] border-[#18202d] shadow-[0_4px_0_#18202d]">
+        
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-[#6fc624] border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex items-center justify-center flex-shrink-0 asset-box">
+            <img src="assets/PNG/courseIdentity2.png" class="asset-img" alt="Data Science">
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="hud-badge bg-[#dcfce7] text-[#15803d] text-xs">CYCLE 3 NOTEBOOK</span>
+              <span class="text-xs font-bold text-[#64748b]">Jupyter-style Cell Architecture</span>
+            </div>
+            <h2 class="font-display text-2xl md:text-3xl text-[#18202d] leading-none mt-0.5">
+              AVIATION WEATHER & FLIGHT TELEMETRY
+            </h2>
+          </div>
+        </div>
+
+        <!-- Global Notebook Actions & Kernel Status -->
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="hud-badge bg-[#f0fdf4] text-[#166534] border-[2px] border-[#18202d]">
+            🟢 Pyodide Python 3.11 Kernel
+          </span>
+          <span class="hud-badge bg-[#eff6ff] text-[#1e40af] border-[2px] border-[#18202d]">
+            🟢 Cloud Synced
+          </span>
+          <button onclick="toggleNotebookEmptyState()" class="hud-badge bg-[#fef9c3] text-[#854d0e] border-dashed border-[2px] border-[#ca8a04] text-xs cursor-pointer" title="Developer QA: Toggle zero-cells empty state preview">
+            🧪 [DEV] Empty
+          </button>
+          <button onclick="addNotebookCell('code')" class="chunky-btn chunky-btn-sm chunky-btn-green">
+            + ADD CELL
+          </button>
+          <button onclick="showToast('▶ Executing all 4 cells sequentially in Pyodide WASM...')" class="chunky-btn chunky-btn-sm chunky-btn-green">
+            ▶ RUN ALL
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Tab Navigation (Matching SRS REQ-DS-01, REQ-DS-02, REQ-DS-03) -->
+      <div class="flex items-center gap-2 pl-3">
+        <button data-dstab="activity" onclick="switchNotebookTab('activity')" class="code-tab-btn ds-tab-btn active">
+          📄 Activity_Cycle3.ipynb (In-Session)
+        </button>
+        <button data-dstab="homework" onclick="switchNotebookTab('homework')" class="code-tab-btn ds-tab-btn">
+          📝 Homework_Cycle3.ipynb (Assigned)
+        </button>
+        <button data-dstab="showcase" onclick="switchNotebookTab('showcase')" class="code-tab-btn ds-tab-btn text-emerald-800 bg-emerald-100">
+          🌟 Cycle12_Showcase.ipynb (Continuous)
+        </button>
+      </div>
+
+      <!-- ====================================================================
+           COLLAPSIBLE DATASETS PANEL / VFS DRAWER (REQ-DS-05)
+           Curriculum-provided datasets preloaded into virtual filesystem.
+           Collapsible to conserve vertical viewport on school Chromebooks.
+           ==================================================================== -->
+      <div id="notebookDatasetsDrawer" class="datasets-drawer">
+        
+        <!-- Drawer Header / Toggle Bar -->
+        <div class="datasets-drawer-header" onclick="toggleDatasetsDrawer()" role="button" tabindex="0" id="datasetsToggleBtn" aria-expanded="false" aria-controls="datasetsDrawerContent">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="text-lg">📁</span>
+            <span class="font-display text-sm md:text-base text-[#18202d] tracking-wide">
+              CURRICULUM DATASETS (VFS)
+            </span>
+            <span id="datasetsCountBadge" class="hud-badge bg-[#eff6ff] text-[#1e40af] text-xs font-bold">
+              2 AVAILABLE • 1 LOCKED
+            </span>
+            <span id="datasetsVfsStatusBadge" class="hud-badge bg-[#dcfce7] text-[#15803d] text-xs">
+              🟢 Preloaded in Memory
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap" onclick="event.stopPropagation()">
+            <!-- Developer QA Switchers for 4 Template States -->
+            <button onclick="setDatasetsPanelState('normal')" class="hud-badge bg-[#f1f5f9] text-[#475569] border-dashed border-[1.5px] border-[#94a3b8] text-xs cursor-pointer hover:bg-slate-200" title="Developer QA: Show normal active & locked datasets">
+              🧪 [DEV] Normal
+            </button>
+            <button onclick="setDatasetsPanelState('loading')" class="hud-badge bg-[#fef9c3] text-[#854d0e] border-dashed border-[1.5px] border-[#ca8a04] text-xs cursor-pointer hover:bg-amber-200" title="Developer QA: Simulate VFS mounting loading state">
+              🧪 [DEV] Mounting...
+            </button>
+            <button onclick="setDatasetsPanelState('empty')" class="hud-badge bg-[#fee2e2] text-[#991b1b] border-dashed border-[1.5px] border-[#ef4444] text-xs cursor-pointer hover:bg-red-200" title="Developer QA: Simulate zero datasets empty state">
+              🧪 [DEV] Empty
+            </button>
+            <button onclick="triggerMissingDatasetError()" class="hud-badge bg-[#ffedd5] text-[#9a3412] border-dashed border-[1.5px] border-[#ea580c] text-xs cursor-pointer hover:bg-orange-200" title="Developer QA: Simulate missing file error and Socratic hint">
+              🧪 [DEV] Missing File Error
+            </button>
+            
+            <!-- Expand/Collapse Chevron Button -->
+            <button onclick="toggleDatasetsDrawer()" class="chunky-btn chunky-btn-sm chunky-btn-slate !py-1 !px-2.5 text-xs flex items-center gap-1.5" id="datasetsChevronBtn">
+              <span id="datasetsChevronText">SHOW DATASETS</span>
+              <span id="datasetsChevronIcon">▼</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Content Body (Defaults to Collapsed to save Chromebook vertical space) -->
+        <div id="datasetsDrawerContent" class="datasets-drawer-body collapsed">
+          
+          <!-- STATE 1: NORMAL VIEW (Active + Locked Datasets) -->
+          <div id="datasetsViewNormal" class="space-y-3">
+            <div class="flex items-center justify-between text-xs text-[#64748b] font-bold px-1">
+              <span>Read-only curriculum datasets mounted in Pyodide WASM sandbox <code>/workspace/data/</code></span>
+              <span class="text-[11px] text-[#059669]">🔒 Student uploads disabled by curriculum policy</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              
+              <!-- Active Dataset 1: telemetry_cycle3.csv -->
+              <div class="dataset-card">
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between gap-1">
+                    <span class="hud-badge bg-[#dcfce7] text-[#15803d] text-[10px]">🟢 PRELOADED</span>
+                    <span class="text-[10px] font-bold text-[#64748b]">Cycle 3</span>
+                  </div>
+                  <div class="font-code font-bold text-sm text-[#18202d] truncate" title="telemetry_cycle3.csv">
+                    📄 telemetry_cycle3.csv
+                  </div>
+                  <div class="text-xs text-[#475569] font-bold flex items-center gap-2">
+                    <span class="font-code">150 × 5</span>
+                    <span>•</span>
+                    <span class="font-code">12.4 KB</span>
+                  </div>
+                  <p class="text-[11px] text-[#64748b] leading-tight">
+                    Flight sensors, wind speeds, altitudes, and corridor hazard statuses.
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 pt-2 border-t border-[#e2e8f0]">
+                  <button onclick="previewDataset('telemetry_cycle3.csv')" class="chunky-btn chunky-btn-sm chunky-btn-indigo flex-1 text-center" title="Preview first 5 rows">
+                    👁️ PREVIEW
+                  </button>
+                  <button onclick="insertDatasetLoadCode('telemetry_cycle3.csv')" class="chunky-btn chunky-btn-sm chunky-btn-green flex-1 text-center" title="Insert pd.read_csv code into cell">
+                    📥 INSERT CODE
+                  </button>
+                </div>
+              </div>
+
+              <!-- Active Dataset 2: wind_hazards_corridors.csv -->
+              <div class="dataset-card">
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between gap-1">
+                    <span class="hud-badge bg-[#dcfce7] text-[#15803d] text-[10px]">🟢 PRELOADED</span>
+                    <span class="text-[10px] font-bold text-[#64748b]">Cycle 3</span>
+                  </div>
+                  <div class="font-code font-bold text-sm text-[#18202d] truncate" title="wind_hazards_corridors.csv">
+                    📄 wind_hazards_corridors.csv
+                  </div>
+                  <div class="text-xs text-[#475569] font-bold flex items-center gap-2">
+                    <span class="font-code">48 × 4</span>
+                    <span>•</span>
+                    <span class="font-code">4.8 KB</span>
+                  </div>
+                  <p class="text-[11px] text-[#64748b] leading-tight">
+                    Corridor threshold benchmarks and obstacle safety ratings.
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 pt-2 border-t border-[#e2e8f0]">
+                  <button onclick="previewDataset('wind_hazards_corridors.csv')" class="chunky-btn chunky-btn-sm chunky-btn-indigo flex-1 text-center" title="Preview first 5 rows">
+                    👁️ PREVIEW
+                  </button>
+                  <button onclick="insertDatasetLoadCode('wind_hazards_corridors.csv')" class="chunky-btn chunky-btn-sm chunky-btn-green flex-1 text-center" title="Insert pd.read_csv code into cell">
+                    📥 INSERT CODE
+                  </button>
+                </div>
+              </div>
+
+              <!-- Locked Dataset 3: orbital_trajectory_cycle4.csv -->
+              <div class="dataset-card locked">
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between gap-1">
+                    <span class="hud-badge bg-[#cbd5e1] text-[#475569] text-[10px]">🔒 LOCKED</span>
+                    <span class="text-[10px] font-bold text-[#94a3b8]">Cycle 4</span>
+                  </div>
+                  <div class="font-code font-bold text-sm text-[#64748b] truncate" title="orbital_trajectory_cycle4.csv">
+                    🔒 orbital_trajectory_cycle4.csv
+                  </div>
+                  <div class="text-xs text-[#94a3b8] font-bold flex items-center gap-2">
+                    <span class="font-code">420 × 8</span>
+                    <span>•</span>
+                    <span class="font-code">34.2 KB</span>
+                  </div>
+                  <p class="text-[11px] text-[#94a3b8] leading-tight">
+                    Future curriculum dataset unlocked when advancing to Cycle 4.
+                  </p>
+                </div>
+                <div class="pt-2 border-t border-[#e2e8f0]">
+                  <button disabled class="chunky-btn chunky-btn-sm chunky-btn-slate w-full opacity-60 cursor-not-allowed">
+                    🔒 UNLOCKS IN CYCLE 4
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- STATE 2: EMPTY STATE VIEW -->
+          <div id="datasetsViewEmpty" class="hidden p-6 text-center space-y-2 bg-[#f8fafc] rounded-xl border-[2px] border-dashed border-[#cbd5e1]">
+            <div class="text-3xl">📭</div>
+            <h4 class="font-display text-lg text-[#18202d]">NO DATASETS FOR THIS CYCLE</h4>
+            <p class="text-xs font-bold text-[#64748b] max-w-md mx-auto">
+              All missions in this session use pure algorithmic computations and synthetic functions. No external CSV files are mounted in your virtual filesystem.
+            </p>
+          </div>
+
+          <!-- STATE 3: LOADING / MOUNTING STATE VIEW -->
+          <div id="datasetsViewLoading" class="hidden p-6 bg-[#0f172a] rounded-xl border-[3px] border-[#18202d] text-white space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl animate-spin">⏳</span>
+                <span class="font-display text-base tracking-wide text-[#fed034]">MOUNTING VIRTUAL FILESYSTEM (VFS)...</span>
+              </div>
+              <span id="vfsMountPercent" class="font-code text-xs text-[#86efac] font-bold">68%</span>
+            </div>
+            <p class="text-xs font-code text-slate-300">
+              Streaming curriculum dataset <code>telemetry_cycle3.csv</code> into browser Pyodide Emscripten memory...
+            </p>
+            <div class="w-full bg-[#1e293b] h-3.5 rounded-full border-[2px] border-[#334155] overflow-hidden p-0.5">
+              <div id="vfsMountProgressBar" class="h-full bg-gradient-to-r from-[#6fc624] to-[#4ade80] rounded-full transition-all duration-300" style="width: 68%;"></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-code text-slate-400">
+              <span>Chunks verified: 12 / 16 KB</span>
+              <span class="text-amber-300">Virtual disk mount in progress</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Socratic Hint Callout for Data Science Notebook (Missing File Error State) -->
+      <div id="notebookSocraticHintCallout" class="hidden chunky-panel p-5 bg-[#fffbeb] border-[3px] border-[#18202d] rounded-[20px] shadow-[0_4px_0_#18202d] space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b-[2px] border-[#18202d]">
+          <div class="flex items-center gap-2.5">
+            <div class="asset-mascot-box w-10 h-10 flex-shrink-0">
+              <img id="notebookSocraticMascotImg" src="assets/PNG/pointleft.png" class="asset-img" alt="Socratic Mascot">
+            </div>
+            <div>
+              <span class="font-display text-lg text-[#92400e] block leading-tight">
+                SOCRATIC FLIGHT GUIDE
+              </span>
+              <span class="socratic-badge">
+                Virtual Filesystem Lookup Hint
+              </span>
+            </div>
+          </div>
+          <button onclick="dismissNotebookSocraticHint()" class="chunky-btn chunky-btn-sm chunky-btn-red !w-7 !h-7 !p-0 rounded-lg" title="Dismiss hint">
+            ✕
+          </button>
+        </div>
+
+        <div class="space-y-2">
+          <p id="notebookSocraticQuestionText" class="font-body font-bold text-sm md:text-base text-[#1e293b] leading-relaxed">
+            Python looked for that file but couldn't find it (<code class="bg-[#fef3c7] px-1 py-0.5 rounded text-[#9a3412] font-code text-xs">FileNotFoundError: [Errno 2] No such file or directory: 'unknown_flight_data.csv'</code>). Which files do you see in your Datasets panel? Check the exact spelling and extension in your Virtual Filesystem!
+          </p>
+          <div class="bg-[#fef3c7] p-2.5 rounded-xl border-[2px] border-[#18202d] text-xs font-bold text-[#78350f] flex items-center gap-2">
+            <span>💡</span>
+            <span>Guidance: Click "SHOW DATASETS" above to verify all available curriculum CSV filenames.</span>
+          </div>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button onclick="dismissNotebookSocraticHint(); toggleDatasetsDrawer(true);" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+            I'LL CHECK MY DATASETS PANEL 🔍
+          </button>
+        </div>
+      </div>
+
+      <!-- Zero Cells Empty State (blankNotebook.png) -->
+      <div id="notebookZeroCellsState" class="hidden chunky-panel p-8 bg-white border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] text-center space-y-4">
+        <div class="asset-illustration-box mx-auto">
+          <img src="assets/PNG/blankNotebook.png" class="asset-img" alt="Empty Notebook">
+        </div>
+        <div class="space-y-1">
+          <h3 class="font-display text-2xl text-[#18202d]">NOTEBOOK HAS NO CELLS</h3>
+          <p class="font-body text-xs md:text-sm font-bold text-[#64748b] max-w-md mx-auto">
+            This notebook currently has 0 cells. Click below to add an interactive code or markdown cell and begin your data exploration!
+          </p>
+        </div>
+        <button onclick="addNotebookCell('code')" class="chunky-btn chunky-btn-green">
+          + ADD FIRST CODE CELL
+        </button>
+      </div>
+
+      <!-- ====================================================================
+           CELL 1: MARKDOWN / INSTRUCTION CELL
+           ==================================================================== -->
+      <div class="notebook-cell-block">
+        
+        <!-- Cell Chrome -->
+        <div class="notebook-cell-header">
+          <div class="flex items-center gap-2">
+            <span class="cell-index-badge">
+              <span>📖</span>
+              <span>MARKDOWN</span>
+            </span>
+            <span class="text-xs font-bold text-[#64748b]">Section 1: Mission Orientation</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#18202d]" title="Edit Markdown">✏️ Edit</button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#f14343]" title="Delete Cell">🗑️</button>
+          </div>
+        </div>
+
+        <!-- Markdown Surface (Warm Cartoon Card Style) -->
+        <div class="p-5 md:p-6 bg-[#ffffff] space-y-3 font-body">
+          <div class="inline-block px-3 py-1 rounded-xl bg-[#fef3c7] border-[2px] border-[#18202d] text-xs font-display text-[#92400e]">
+            MISSION OBJECTIVE • PANDAS TELEMETRY ANALYSIS
+          </div>
+          <h3 class="font-display text-2xl text-[#18202d]">
+            Analyzing Autonomous Drone Corridors for High-Altitude Wind Hazards
+          </h3>
+          <p class="font-bold text-sm text-[#475569] leading-relaxed">
+            Welcome to Data Science Cycle 3! In this cycle, you will inspect real telemetry feeds streamed from four drone navigation corridors. You'll load the data into a <strong>Pandas DataFrame</strong>, inspect wind speed thresholds, and generate an aviation wind profile chart.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div class="p-2.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#18202d] text-xs font-bold text-[#334155]">
+              🎯 <strong>Step 1:</strong> Load CSV and inspect the first 5 records with <code>.head()</code>
+            </div>
+            <div class="p-2.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#18202d] text-xs font-bold text-[#334155]">
+              🎯 <strong>Step 2:</strong> Plot wind speed across corridors using Matplotlib
+            </div>
+            <div class="p-2.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#18202d] text-xs font-bold text-[#334155]">
+              🎯 <strong>Step 3:</strong> Filter out flights with wind speed &gt; 20 knots
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Add Cell Affordance 1 -->
+      <div class="notebook-add-cell-divider">
+        <div class="add-cell-btn-group">
+          <button onclick="addNotebookCell('code')" class="add-cell-btn">
+            <span>+</span> CODE CELL
+          </button>
+          <button onclick="addNotebookCell('markdown')" class="add-cell-btn">
+            <span>+</span> TEXT CELL
+          </button>
+        </div>
+      </div>
+
+      <!-- ====================================================================
+           CELL 2: CODE CELL WITH PINNED DATAFRAME TABLE VIEW
+           ==================================================================== -->
+      <div class="notebook-cell-block active-cell">
+        
+        <!-- Cell Chrome -->
+        <div class="notebook-cell-header">
+          <div class="flex items-center gap-3">
+            <span class="cell-index-badge">
+              <div class="asset-box w-4 h-4 inline-block align-middle mr-0.5"><img src="assets/PNG/Courseidentity1.png" class="asset-img" alt="Python"></div>
+              <span>In [1]:</span>
+            </span>
+            <span id="status-cell-1" class="text-[11px] font-bold text-[#16a34a]">
+              Executed in 18ms
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Compact Local Run Button -->
+            <button id="btn-run-cell-1" onclick="runNotebookCell(1)" class="cell-run-btn">
+              <span>▶ RUN CELL</span>
+            </button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#18202d]" title="Move Cell Up">▲</button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#18202d]" title="Move Cell Down">▼</button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#f14343]" title="Delete Cell">🗑️</button>
+          </div>
+        </div>
+
+        <!-- Strictly Monospace Code Area (High-Contrast Slate Surface) -->
+        <div class="relative bg-[#1e2430]">
+          <textarea class="notebook-code-surface chunky-scroll" spellcheck="false">import pandas as pd
+import numpy as np
+
+# Load flight sensor telemetry dataset
+df = pd.read_csv("telemetry_cycle3.csv")
+
+# Display the first 5 records
+df.head()</textarea>
+        </div>
+
+        <!-- PINNED OUTPUT: DATAFRAME VIEW (Directly Below Code) -->
+        <div class="notebook-pinned-output">
+          <div class="pinned-output-header">
+            <span>OUT [1] — PANDAS DATAFRAME (5 ROWS × 5 COLUMNS)</span>
+            <span class="text-[10px] text-[#64748b]">Memory: 1.2 KB | Shape: (5, 5)</span>
+          </div>
+
+          <!-- Chunky DataFrame Table -->
+          <div class="chunky-dataframe-container">
+            <table class="chunky-dataframe">
+              <thead>
+                <tr>
+                  <th class="idx-col">#</th>
+                  <th>Flight_ID</th>
+                  <th>Altitude (m)</th>
+                  <th>Battery %</th>
+                  <th>Wind Speed (kn)</th>
+                  <th>Telemetry Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="idx-col">0</td>
+                  <td class="font-bold text-[#2563eb]">SK-101</td>
+                  <td>1,200</td>
+                  <td>92%</td>
+                  <td>12.4</td>
+                  <td><span class="hud-badge bg-[#dcfce7] text-[#15803d] text-xs">NORMAL 🟢</span></td>
+                </tr>
+                <tr>
+                  <td class="idx-col">1</td>
+                  <td class="font-bold text-[#2563eb]">SK-102</td>
+                  <td>3,400</td>
+                  <td>45%</td>
+                  <td class="font-bold text-[#ea580c]">28.1</td>
+                  <td><span class="hud-badge bg-[#ffedd5] text-[#c2410c] text-xs">HIGH WIND ⚠️</span></td>
+                </tr>
+                <tr>
+                  <td class="idx-col">2</td>
+                  <td class="font-bold text-[#2563eb]">SK-103</td>
+                  <td>850</td>
+                  <td class="font-bold text-[#dc2626]">18%</td>
+                  <td>4.5</td>
+                  <td><span class="hud-badge bg-[#fee2e2] text-[#b91c1c] text-xs">LOW BATTERY 🔋</span></td>
+                </tr>
+                <tr>
+                  <td class="idx-col">3</td>
+                  <td class="font-bold text-[#2563eb]">SK-104</td>
+                  <td>4,100</td>
+                  <td>77%</td>
+                  <td class="font-bold text-[#dc2626]">34.0</td>
+                  <td><span class="hud-badge bg-[#fecaca] text-[#991b1b] text-xs animate-pulse">TURBULENCE 🚨</span></td>
+                </tr>
+                <tr>
+                  <td class="idx-col">4</td>
+                  <td class="font-bold text-[#2563eb]">SK-105</td>
+                  <td>2,250</td>
+                  <td>88%</td>
+                  <td>15.0</td>
+                  <td><span class="hud-badge bg-[#dcfce7] text-[#15803d] text-xs">NORMAL 🟢</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-2 text-[11px] font-bold text-[#64748b] flex items-center justify-between">
+            <span>Index: RangeIndex(start=0, stop=5, step=1)</span>
+            <span>Dtypes: object(2), float64(2), int64(1)</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Add Cell Affordance 2 -->
+      <div class="notebook-add-cell-divider">
+        <div class="add-cell-btn-group">
+          <button onclick="addNotebookCell('code')" class="add-cell-btn">
+            <span>+</span> CODE CELL
+          </button>
+          <button onclick="addNotebookCell('markdown')" class="add-cell-btn">
+            <span>+</span> TEXT CELL
+          </button>
+        </div>
+      </div>
+
+      <!-- ====================================================================
+           CELL 3: CODE CELL WITH PINNED CHART VISUALIZATION
+           ==================================================================== -->
+      <div class="notebook-cell-block">
+        
+        <!-- Cell Chrome -->
+        <div class="notebook-cell-header">
+          <div class="flex items-center gap-3">
+            <span class="cell-index-badge">
+              <div class="asset-box w-4 h-4 inline-block align-middle mr-0.5"><img src="assets/PNG/Courseidentity1.png" class="asset-img" alt="Python"></div>
+              <span>In [2]:</span>
+            </span>
+            <span id="status-cell-2" class="text-[11px] font-bold text-[#16a34a]">
+              Executed in 34ms
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Compact Local Run Button -->
+            <button id="btn-run-cell-2" onclick="runNotebookCell(2)" class="cell-run-btn">
+              <span>▶ RUN CELL</span>
+            </button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#18202d]" title="Move Cell Up">▲</button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#18202d]" title="Move Cell Down">▼</button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#f14343]" title="Delete Cell">🗑️</button>
+          </div>
+        </div>
+
+        <!-- Strictly Monospace Code Area -->
+        <div class="relative bg-[#1e2430]">
+          <textarea class="notebook-code-surface chunky-scroll" spellcheck="false">import matplotlib.pyplot as plt
+
+# Aggregate average wind speed by flight corridor
+corridors = ['North Ridge', 'Coastal Bay', 'Mountain Pass', 'Valley East']
+wind_speeds = [12.4, 28.1, 34.0, 15.0]
+
+plt.figure(figsize=(9, 4))
+plt.bar(corridors, wind_speeds, color=['#299bf5', '#f97316', '#f14343', '#6fc624'])
+plt.title("Aviation Wind Speeds by Corridor (Knots)")
+plt.ylabel("Speed (knots)")
+plt.show()</textarea>
+        </div>
+
+        <!-- PINNED OUTPUT: CHART PLACEHOLDER (Directly Below Code) -->
+        <div class="notebook-pinned-output">
+          <div class="pinned-output-header">
+            <span>OUT [2] — FIGURE 1: BAR CHART VISUALIZATION</span>
+            <span class="text-[10px] text-[#64748b]">Renderer: Matplotlib SVG Vector Engine</span>
+          </div>
+
+          <!-- Chunky Chart Box -->
+          <div class="chunky-chart-box">
+            
+            <div class="flex items-center justify-between pb-3 mb-2 border-b-[2px] border-[#e2e8f0]">
+              <div>
+                <h4 class="font-display text-lg text-[#18202d]">
+                  AVIATION WIND SPEEDS BY CORRIDOR (KNOTS)
+                </h4>
+                <p class="font-body text-xs font-bold text-[#64748b]">
+                  Dashed line marks the safe autonomous flight threshold (20 knots)
+                </p>
+              </div>
+              <div class="hud-badge bg-[#fef08a] text-[#854d0e] text-xs">
+                THRESHOLD: 20 KNOTS
+              </div>
+            </div>
+
+            <!-- SVG Bar Chart with Chunky Ink Borders & Candy Colors -->
+            <div class="w-full flex justify-center py-2">
+              <svg viewBox="0 0 680 260" class="w-full max-w-[640px] overflow-visible">
+                <!-- Grid lines -->
+                <line x1="60" y1="20" x2="640" y2="20" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="4,4"/>
+                <line x1="60" y1="80" x2="640" y2="80" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="4,4"/>
+                <line x1="60" y1="140" x2="640" y2="140" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="4,4"/>
+                <line x1="60" y1="200" x2="640" y2="200" stroke="#cbd5e1" stroke-width="2.5"/>
+
+                <!-- 20 Knots Threshold Line -->
+                <line x1="60" y1="100" x2="640" y2="100" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="6,4"/>
+                <text x="645" y="104" font-family="'Lilita One'" font-size="11" fill="#dc2626">20 kn Limit</text>
+
+                <!-- Y-Axis Labels -->
+                <text x="45" y="24" font-family="'Fredoka'" font-size="11" font-weight="700" fill="#64748b" text-anchor="end">40 kn</text>
+                <text x="45" y="84" font-family="'Fredoka'" font-size="11" font-weight="700" fill="#64748b" text-anchor="end">30 kn</text>
+                <text x="45" y="144" font-family="'Fredoka'" font-size="11" font-weight="700" fill="#64748b" text-anchor="end">15 kn</text>
+                <text x="45" y="204" font-family="'Fredoka'" font-size="11" font-weight="700" fill="#64748b" text-anchor="end">0 kn</text>
+
+                <!-- Bar 1: North Ridge (12.4 kn) -->
+                <g class="cursor-pointer hover:opacity-90 transition-opacity">
+                  <rect x="100" y="138" width="80" height="62" rx="10" fill="#299bf5" stroke="#18202d" stroke-width="3"/>
+                  <rect x="100" y="196" width="80" height="4" fill="#18202d"/>
+                  <text x="140" y="130" font-family="'Lilita One'" font-size="14" fill="#18202d" text-anchor="middle">12.4 kn</text>
+                  <text x="140" y="222" font-family="'Fredoka'" font-size="12" font-weight="800" fill="#18202d" text-anchor="middle">North Ridge</text>
+                </g>
+
+                <!-- Bar 2: Coastal Bay (28.1 kn) -->
+                <g class="cursor-pointer hover:opacity-90 transition-opacity">
+                  <rect x="240" y="60" width="80" height="140" rx="10" fill="#f97316" stroke="#18202d" stroke-width="3"/>
+                  <rect x="240" y="196" width="80" height="4" fill="#18202d"/>
+                  <text x="280" y="52" font-family="'Lilita One'" font-size="14" fill="#b45309" text-anchor="middle">28.1 kn ⚠️</text>
+                  <text x="280" y="222" font-family="'Fredoka'" font-size="12" font-weight="800" fill="#18202d" text-anchor="middle">Coastal Bay</text>
+                </g>
+
+                <!-- Bar 3: Mountain Pass (34.0 kn) -->
+                <g class="cursor-pointer hover:opacity-90 transition-opacity">
+                  <rect x="380" y="30" width="80" height="170" rx="10" fill="#f14343" stroke="#18202d" stroke-width="3"/>
+                  <rect x="380" y="196" width="80" height="4" fill="#18202d"/>
+                  <text x="420" y="22" font-family="'Lilita One'" font-size="14" fill="#991b1b" text-anchor="middle">34.0 kn 🚨</text>
+                  <text x="420" y="222" font-family="'Fredoka'" font-size="12" font-weight="800" fill="#18202d" text-anchor="middle">Mountain Pass</text>
+                </g>
+
+                <!-- Bar 4: Valley East (15.0 kn) -->
+                <g class="cursor-pointer hover:opacity-90 transition-opacity">
+                  <rect x="520" y="125" width="80" height="75" rx="10" fill="#6fc624" stroke="#18202d" stroke-width="3"/>
+                  <rect x="520" y="196" width="80" height="4" fill="#18202d"/>
+                  <text x="560" y="117" font-family="'Lilita One'" font-size="14" fill="#15803d" text-anchor="middle">15.0 kn</text>
+                  <text x="560" y="222" font-family="'Fredoka'" font-size="12" font-weight="800" fill="#18202d" text-anchor="middle">Valley East</text>
+                </g>
+              </svg>
+            </div>
+
+            <!-- Legend Pill Row -->
+            <div class="flex flex-wrap items-center justify-center gap-3 pt-3 border-t-[2px] border-[#e2e8f0] text-xs font-bold font-body">
+              <span class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded-md bg-[#299bf5] border-[1.5px] border-[#18202d]"></span> North Ridge (Safe)</span>
+              <span class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded-md bg-[#f97316] border-[1.5px] border-[#18202d]"></span> Coastal Bay (Caution)</span>
+              <span class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded-md bg-[#f14343] border-[1.5px] border-[#18202d]"></span> Mountain Pass (Hazard)</span>
+              <span class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded-md bg-[#6fc624] border-[1.5px] border-[#18202d]"></span> Valley East (Safe)</span>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Add Cell Affordance 3 -->
+      <div class="notebook-add-cell-divider">
+        <div class="add-cell-btn-group">
+          <button onclick="addNotebookCell('code')" class="add-cell-btn">
+            <span>+</span> CODE CELL
+          </button>
+          <button onclick="addNotebookCell('markdown')" class="add-cell-btn">
+            <span>+</span> TEXT CELL
+          </button>
+        </div>
+      </div>
+
+      <!-- ====================================================================
+           CELL 4: SUMMARY STATS / STDOUT OUTPUT CELL
+           ==================================================================== -->
+      <div class="notebook-cell-block">
+        
+        <!-- Cell Chrome -->
+        <div class="notebook-cell-header">
+          <div class="flex items-center gap-3">
+            <span class="cell-index-badge">
+              <div class="asset-box w-4 h-4 inline-block align-middle mr-0.5"><img src="assets/PNG/Courseidentity1.png" class="asset-img" alt="Python"></div>
+              <span>In [3]:</span>
+            </span>
+            <span id="status-cell-3" class="text-[11px] font-bold text-[#16a34a]">
+              Executed in 12ms
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Compact Local Run Button -->
+            <button id="btn-run-cell-3" onclick="runNotebookCell(3)" class="cell-run-btn">
+              <span>▶ RUN CELL</span>
+            </button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#18202d]" title="Move Cell Up">▲</button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#18202d]" title="Move Cell Down">▼</button>
+            <button class="text-xs font-bold text-[#94a3b8] hover:text-[#f14343]" title="Delete Cell">🗑️</button>
+          </div>
+        </div>
+
+        <!-- Strictly Monospace Code Area -->
+        <div class="relative bg-[#1e2430]">
+          <textarea class="notebook-code-surface chunky-scroll" spellcheck="false"># Compute mission averages for high-wind flights (>20 knots)
+high_wind_flights = df[df["Wind Speed (kn)"] > 20]
+print(f"High-Wind Flights Detected: {len(high_wind_flights)}")
+print(f"Mean Altitude for High-Wind Flights: {high_wind_flights['Altitude (m)'].mean():.2f} meters")
+print("Telemetry analysis complete: Corridors flagged for automated rerouting.")</textarea>
+        </div>
+
+        <!-- PINNED OUTPUT: STDOUT TEXT STREAM -->
+        <div class="notebook-pinned-output">
+          <div class="pinned-output-header">
+            <span>OUT [3] — STDOUT STREAM</span>
+            <span class="text-[10px] text-[#64748b]">Plaintext Output</span>
+          </div>
+
+          <div class="bg-[#1e2430] p-3.5 rounded-xl border-[2px] border-[#18202d] text-xs font-code text-[#818cf8] leading-relaxed">
+            <div>High-Wind Flights Detected: 2</div>
+            <div>Mean Altitude for High-Wind Flights: 3,750.00 meters</div>
+            <div class="text-[#86efac]">Telemetry analysis complete: Corridors flagged for automated rerouting.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom Add-Cell Big Affordance & Checkpoint -->
+      <div class="p-6 rounded-2xl border-[3px] border-dashed border-[#18202d] bg-[#f8fafc] text-center space-y-3">
+        <div class="text-2xl">➕</div>
+        <h4 class="font-display text-xl text-[#18202d]">
+          EXTEND YOUR CYCLE 3 NOTEBOOK
+        </h4>
+        <p class="font-body text-xs font-bold text-[#64748b] max-w-md mx-auto">
+          Add additional analysis cells, filter battery levels, or document your investigative conclusions before session wrap-up.
+        </p>
+        <div class="flex items-center justify-center gap-3 pt-2">
+          <button onclick="addNotebookCell('code')" class="chunky-btn chunky-btn-sm chunky-btn-green">
+            + ADD CODE CELL
+          </button>
+          <button onclick="addNotebookCell('markdown')" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+            + ADD MARKDOWN CELL
+          </button>
+          <button onclick="sfx.play('coin'); showToast('💾 Cycle 3 Notebook Checkpoint Saved to Cloud!');" class="chunky-btn chunky-btn-sm chunky-btn-green">
+            💾 SAVE CHECKPOINT
+          </button>
+        </div>
+      </div>
+
+    </section>
+      
+      <!-- Facilitator Header & Cohort Unlock Pacing (REQ-CRS-03) -->
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs">FACILITATOR CONSOLE</span>
+          <h2 class="font-display text-3xl text-[#18202d]">
+            COHORT ALPHA — OAKRIDGE INTERNATIONAL
+          </h2>
+          <p class="font-body text-sm font-bold text-[#64748b]">
+            Managing 5 Students • Python Programming — Milestone 1 Session 1 Live Pacing
+          </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <span id="cohortUnlockStatusBadge" class="hud-badge bg-[#f14343] text-white">
+            SESSION 2 LOCKED
+          </span>
+          <button id="btnCohortUnlock" onclick="toggleCohortSessionUnlock()" class="chunky-btn chunky-btn-green">
+            UNLOCK SESSION 2 FOR COHORT 🔓
+          </button>
+        </div>
+      </div>
+
+      <!-- Cohort Live Roster Grid -->
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+        <h3 class="font-display text-2xl text-[#18202d] flex items-center justify-between">
+          <span>LIVE STUDENT ROSTER & CODE PEEK</span>
+          <span class="text-xs font-bold font-body text-[#64748b]">Real-Time Pulse (REQ 3.7)</span>
+        </h3>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b-[3px] border-[#18202d] text-sm font-display text-[#18202d]">
+                <th class="py-3 px-3">STUDENT</th>
+                <th class="py-3 px-3">GRADE</th>
+                <th class="py-3 px-3">LIVE STATUS</th>
+                <th class="py-3 px-3">CURRENT FILE</th>
+                <th class="py-3 px-3">HOMEWORK</th>
+                <th class="py-3 px-3 text-right">ACTION</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y-[2px] divide-[#cbd5e1] font-body text-sm font-bold">
+              
+              <!-- Student 1: Arjun -->
+              <tr>
+                <td class="py-3 px-3 flex items-center gap-2">
+                  <div class="asset-avatar-circle-sm"><img src="assets/PNG/av1.png" class="asset-img" alt="Arjun"></div>
+                  <span>Arjun Patel</span>
+                </td>
+                <td class="py-3 px-3">Grade 7</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#bbf7d0] text-[#14532d] text-xs">🟢 Active Now (Line 18)</span>
+                </td>
+                <td class="py-3 px-3">Activity.py (18 lines)</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">Submitted</span>
+                </td>
+                <td class="py-3 px-3 text-right">
+                  <button onclick="peekStudentCode('s1')" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+                    👁️ PEEK CODE
+                  </button>
+                </td>
+              </tr>
+
+              <!-- Student 2: Maya -->
+              <tr>
+                <td class="py-3 px-3 flex items-center gap-2">
+                  <div class="asset-avatar-circle-sm"><img src="assets/PNG/av2.png" class="asset-img" alt="Maya"></div>
+                  <span>Maya Sharma</span>
+                </td>
+                <td class="py-3 px-3">Grade 8</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#bbf7d0] text-[#14532d] text-xs">🟢 Active Now (Line 9)</span>
+                </td>
+                <td class="py-3 px-3">Activity.py (11 lines)</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs">In Progress</span>
+                </td>
+                <td class="py-3 px-3 text-right">
+                  <button onclick="peekStudentCode('s2')" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+                    👁️ PEEK CODE
+                  </button>
+                </td>
+              </tr>
+
+              <!-- Student 3: Rohan -->
+              <tr>
+                <td class="py-3 px-3 flex items-center gap-2">
+                  <div class="asset-avatar-circle-sm"><img src="assets/PNG/av3.png" class="asset-img" alt="Rohan"></div>
+                  <span>Rohan Kumar</span>
+                </td>
+                <td class="py-3 px-3">Grade 7</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#fef08a] text-[#854d0e] text-xs">🟡 Idle &gt;4m</span>
+                </td>
+                <td class="py-3 px-3">Activity.py (14 lines)</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">Submitted</span>
+                </td>
+                <td class="py-3 px-3 text-right">
+                  <button onclick="peekStudentCode('s3')" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+                    👁️ PEEK CODE
+                  </button>
+                </td>
+              </tr>
+
+              <!-- Student 4: Zara (Absent) -->
+              <tr>
+                <td class="py-3 px-3 flex items-center gap-2">
+                  <div class="asset-avatar-circle-sm"><img src="assets/PNG/av4.png" class="asset-img" alt="Zara"></div>
+                  <span>Zara Dsouza</span>
+                </td>
+                <td class="py-3 px-3">Grade 7</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#cbd5e1] text-[#475569] text-xs">⚪ Not Started Today</span>
+                </td>
+                <td class="py-3 px-3 text-[#94a3b8]">No session started yet</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#fecaca] text-[#991b1b] text-xs">Not Started</span>
+                </td>
+                <td class="py-3 px-3 text-right">
+                  <button onclick="reopenForStudent('Zara Dsouza')" class="chunky-btn chunky-btn-sm chunky-btn-green" title="Open session for student">
+                    &#x1F513; OPEN S1
+                  </button>
+                </td>
+              </tr>
+
+              <!-- Student 5: Kabir -->
+              <tr>
+                <td class="py-3 px-3 flex items-center gap-2">
+                  <div class="asset-avatar-circle-sm"><img src="assets/PNG/av5.png" class="asset-img" alt="Kabir"></div>
+                  <span>Kabir Sen</span>
+                </td>
+                <td class="py-3 px-3">Grade 8</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#bbf7d0] text-[#14532d] text-xs">🟢 Active Now (Line 11)</span>
+                </td>
+                <td class="py-3 px-3">Activity.py (11 lines)</td>
+                <td class="py-3 px-3">
+                  <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">Submitted</span>
+                </td>
+                <td class="py-3 px-3 text-right">
+                  <button onclick="peekStudentCode('s5')" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+                    👁️ PEEK CODE
+                  </button>
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Homework Review & Inline Commenting Tool (REQ-HW-03) -->
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-display text-2xl text-[#18202d]">
+            HOMEWORK INLINE COMMENTING TOOL (REQ-HW-03)
+          </h3>
+          <button onclick="toggleHomeworkEmptyState()" class="hud-badge bg-[#fef9c3] text-[#854d0e] border-dashed border-[2px] border-[#ca8a04] text-xs cursor-pointer" title="Developer QA: Toggle no-homework empty state">
+            🧪 [DEV] Empty
+          </button>
+        </div>
+        <p class="font-body text-sm font-bold text-[#64748b]">
+          Leave direct feedback on students' submitted Homework.py files:
+        </p>
+
+        <!-- Active Submissions Grid -->
+        <div id="hwSubmissionsActive" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          
+          <div class="p-4 rounded-xl bg-[#f8fafc] border-[2.5px] border-[#18202d] space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="asset-avatar-circle-sm"><img src="assets/PNG/av1.png" class="asset-img" alt="Arjun"></div>
+                <span class="font-display text-base">Arjun Patel — Altitude Check</span>
+              </div>
+              <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">READY FOR REVIEW</span>
+            </div>
+            <div class="bg-[#1e2430] p-2.5 rounded-lg text-xs font-code text-slate-200">
+              <code>if alt &gt;= 10 and alt &lt;= 120: return "SAFE"</code>
+            </div>
+            <div class="flex gap-2">
+              <input id="hw-comment-ArjunPatel" type="text" value="Super clean boundary conditions, Arjun!" class="chunky-input text-xs flex-1">
+              <button onclick="saveHomeworkComment('Arjun Patel')" class="chunky-btn chunky-btn-sm chunky-btn-green">
+                SEND
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-[#f8fafc] border-[2.5px] border-[#18202d] space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="asset-avatar-circle-sm"><img src="assets/PNG/av3.png" class="asset-img" alt="Rohan"></div>
+                <span class="font-display text-base">Rohan Kumar — Altitude Check</span>
+              </div>
+              <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">READY FOR REVIEW</span>
+            </div>
+            <div class="bg-[#1e2430] p-2.5 rounded-lg text-xs font-code text-slate-200">
+              <code>if alt &gt; 10: return "SAFE" # forgot upper limit</code>
+            </div>
+            <div class="flex gap-2">
+              <input id="hw-comment-RohanKumar" type="text" value="What happens if the drone flies above 120 meters?" class="chunky-input text-xs flex-1">
+              <button onclick="saveHomeworkComment('Rohan Kumar')" class="chunky-btn chunky-btn-sm chunky-btn-green">
+                SEND
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Empty State: All Homework Reviewed (nohomework.png) -->
+        <div id="noHomeworkQueueState" class="hidden text-center py-6 space-y-3">
+          <div class="asset-illustration-box mx-auto">
+            <img src="assets/PNG/nohomework.png" class="asset-img" alt="No Homework Pending">
+          </div>
+          <h4 class="font-display text-xl text-[#18202d]">ALL HOMEWORK REVIEWED!</h4>
+          <p class="font-body text-xs md:text-sm font-bold text-[#64748b] max-w-sm mx-auto">
+            Great job! You have graded all submitted student assignments for this cohort.
+          </p>
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- ======================================================================
+         SCREEN 4: PARENT VIEW (REQ 3.8 — READ-ONLY SAFE)
+         ====================================================================== -->
+    <section id="screen-parent" class="w-full space-y-6 hidden">
+      
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div class="asset-avatar-circle w-16 h-16 border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex-shrink-0">
+            <img src="assets/PNG/av1.png" class="asset-img" alt="Arjun Patel">
+          </div>
+          <div>
+            <span class="hud-badge bg-[#bbf7d0] text-[#14532d] text-xs">PARENT PORTAL (READ-ONLY)</span>
+            <h2 class="font-display text-3xl text-[#18202d]">
+              ARJUN PATEL'S LEARNING PROGRESS
+            </h2>
+            <p class="font-body text-sm font-bold text-[#64748b]">
+              Oakridge International • Enrolled in Python Programming & Data Science Level 1
+            </p>
+          </div>
+        </div>
+        <div class="hud-badge bg-[#fed034] text-[#854d0e] text-sm p-3">
+          LINK CODE: SE-PAR-9041
+        </div>
+      </div>
+
+      <!-- Quick Metrics Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="chunky-panel p-5 bg-[#dbeafe] border-[3px] border-[#18202d] rounded-2xl shadow-[0_4px_0_#18202d]">
+          <span class="font-display text-xs text-[#1e40af]">COURSE COMPLETION</span>
+          <div class="font-display text-3xl text-[#18202d] my-1">14 / 26 SESSIONS</div>
+          <span class="font-body font-bold text-xs text-[#2563eb]">54% of Curriculum Mastered</span>
+        </div>
+
+        <div class="chunky-panel p-5 bg-[#dcfce7] border-[3px] border-[#18202d] rounded-2xl shadow-[0_4px_0_#18202d]">
+          <span class="font-display text-xs text-[#166534]">ATTENDANCE & ENGAGEMENT</span>
+          <div class="font-display text-3xl text-[#18202d] my-1">100% ATTENDANCE</div>
+          <span class="font-body font-bold text-xs text-[#15803d]">7-Day Practice Streak 🔥</span>
+        </div>
+
+        <div class="chunky-panel p-5 bg-[#fef08a] border-[3px] border-[#18202d] rounded-2xl shadow-[0_4px_0_#18202d]">
+          <span class="font-display text-xs text-[#854d0e]">HOMEWORK TURNAROUND</span>
+          <div class="font-display text-3xl text-[#18202d] my-1">13 / 13 SUBMITTED</div>
+          <span class="font-body font-bold text-xs text-[#b45309]">All reviewed by Facilitator Priya</span>
+        </div>
+      </div>
+
+      <!-- Upcoming Sessions Schedule (REQ-HW-01 & SRS §3.8) -->
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+        <h3 class="font-display text-2xl text-[#18202d]">
+          UPCOMING LIVE SESSIONS
+        </h3>
+        <div class="space-y-3 font-body font-bold">
+          <div class="flex items-center justify-between p-3.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#18202d]">
+            <div>
+              <div class="font-display text-lg text-[#18202d]">Session 15: Defensive Loops & Sensor Feeds</div>
+              <div class="text-xs text-[#64748b]">Saturday, 10:00 AM – 11:30 AM • In-Person at Oakridge Lab</div>
+            </div>
+            <span class="hud-badge bg-[#fed034] text-[#854d0e]">UPCOMING</span>
+          </div>
+          <div class="flex items-center justify-between p-3.5 rounded-xl bg-[#f8fafc] border-[2px] border-[#18202d]">
+            <div>
+              <div class="font-display text-lg text-[#18202d]">Data Science Cycle 4: Statistical Telemetry Analysis</div>
+              <div class="text-xs text-[#64748b]">Wednesday, 4:00 PM – 5:30 PM • Online Classroom</div>
+            </div>
+            <span class="hud-badge bg-[#cbd5e1] text-[#475569]">SCHEDULED</span>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- ======================================================================
+         SCREEN 5: ADMIN / OPS CONSOLE (REQ 3.9)
+         ====================================================================== -->
+    <section id="screen-admin" class="w-full space-y-6 hidden">
+      
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs">ADMIN & OPS OPERATIONS</span>
+          <h2 class="font-display text-3xl text-[#18202d]">
+            SCHOOLS & COHORT MANAGEMENT
+          </h2>
+          <p class="font-body text-sm font-bold text-[#64748b]">
+            Managing 3 Partner Schools • 14 Active Cohorts • Curriculum Versioning
+          </p>
+        </div>
+        <button class="chunky-btn chunky-btn-green">
+          + CREATE NEW COHORT
+        </button>
+      </div>
+
+      <!-- Cohorts Table -->
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+        <h3 class="font-display text-2xl text-[#18202d]">
+          ACTIVE COHORTS ACROSS SCHOOLS
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse font-body text-sm font-bold">
+            <thead>
+              <tr class="border-b-[3px] border-[#18202d] text-sm font-display text-[#18202d]">
+                <th class="py-3 px-3">COHORT</th>
+                <th class="py-3 px-3">SCHOOL</th>
+                <th class="py-3 px-3">COURSE</th>
+                <th class="py-3 px-3">FACILITATOR</th>
+                <th class="py-3 px-3">STUDENTS</th>
+                <th class="py-3 px-3">PROGRESS</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y-[2px] divide-[#cbd5e1]">
+              <tr>
+                <td class="py-3 px-3 font-display">Cohort Alpha</td>
+                <td class="py-3 px-3">Oakridge International</td>
+                <td class="py-3 px-3 text-[#2563eb]">Python Programming</td>
+                <td class="py-3 px-3">Priya Sharma</td>
+                <td class="py-3 px-3">18 Students</td>
+                <td class="py-3 px-3"><span class="hud-badge bg-[#bbf7d0] text-[#14532d]">Session 1 / 30</span></td>
+              </tr>
+              <tr>
+                <td class="py-3 px-3 font-display">Cohort Beta</td>
+                <td class="py-3 px-3">Delhi Public School</td>
+                <td class="py-3 px-3 text-[#16a34a]">Data Science L1</td>
+                <td class="py-3 px-3">Rahul Verma</td>
+                <td class="py-3 px-3">22 Students</td>
+                <td class="py-3 px-3"><span class="hud-badge bg-[#fed034] text-[#854d0e]">Cycle 3 / 12</span></td>
+              </tr>
+              <tr>
+                <td class="py-3 px-3 font-display">Cohort Gamma</td>
+                <td class="py-3 px-3">Ryan Global School</td>
+                <td class="py-3 px-3 text-[#2563eb]">Python Programming</td>
+                <td class="py-3 px-3">Priya Sharma</td>
+                <td class="py-3 px-3">15 Students</td>
+                <td class="py-3 px-3"><span class="hud-badge bg-[#bae6fd] text-[#0369a1]">Session 8 / 26</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Curriculum Versioning (REQ 3.9) -->
+      <div class="chunky-panel p-6 bg-[#d5dfe6] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <h4 class="font-display text-xl text-[#18202d]">
+            CURRICULUM RELEASES & CODE TEMPLATES
+          </h4>
+          <p class="font-body text-xs font-bold text-[#334155]">
+            Python Core: <strong>v1.2.0 (Active)</strong> • Data Science L1: <strong>v1.0.4 (Active)</strong>
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <button class="chunky-btn chunky-btn-sm chunky-btn-dark">
+            MANAGE TEMPLATES
+          </button>
+          <button class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+            PUBLISH VERSION
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- ======================================================================
+         SCREEN 6: DESIGN TOKENS & ASSET PACK AUDIT SHOWCASE
+         ====================================================================== -->
+    <section id="screen-tokens" class="w-full space-y-6 hidden">
+      
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d]">
+        <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs">DESIGN SYSTEM INSPECTOR</span>
+        <h2 class="font-display text-3xl text-[#18202d]">
+          CHUNKY CARTOON / CANDY UI DESIGN TOKENS
+        </h2>
+        <p class="font-body text-sm font-bold text-[#64748b]">
+          Extracted tokens from <code>cartoon_rpg_game_ui_kit.html</code> and <code>chunky-cartoon-ui-style-guide.md</code>
+        </p>
+      </div>
+
+      <!-- Color Palette Swatches -->
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+        <h3 class="font-display text-xl text-[#18202d]">1. CANDY PALETTE SWATCHES</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+          <div class="p-3 rounded-xl border-[2.5px] border-[#18202d] bg-[#fed034] text-[#18202d] font-display text-xs text-center shadow-[0_3px_0_#18202d]">
+            Gold Coin<br>#fed034 (Reward Only)
+          </div>
+          <div class="p-3 rounded-xl border-[2.5px] border-[#18202d] bg-[#6fc624] text-white font-display text-xs text-center shadow-[0_3px_0_#18202d]">
+            Green Play<br>#6fc624 (RUN / Confirm)
+          </div>
+          <div class="p-3 rounded-xl border-[2.5px] border-[#18202d] bg-[#f14343] text-white font-display text-xs text-center shadow-[0_3px_0_#18202d]">
+            Red Stop<br>#f14343 (Danger / Stop)
+          </div>
+          <div class="p-3 rounded-xl border-[2.5px] border-[#18202d] bg-[#299bf5] text-white font-display text-xs text-center shadow-[0_3px_0_#18202d]">
+            Python Blue<br>#299bf5 (Track Only)
+          </div>
+          <div class="p-3 rounded-xl border-[2.5px] border-[#18202d] bg-[#4f46e5] text-white font-display text-xs text-center shadow-[0_3px_0_#18202d]">
+            Secondary Indigo<br>#4f46e5 (Actions)
+          </div>
+          <div class="p-3 rounded-xl border-[2.5px] border-[#18202d] bg-[#10b981] text-white font-display text-xs text-center shadow-[0_3px_0_#18202d]">
+            Data Teal<br>#10b981 (Track Only)
+          </div>
+          <div class="p-3 rounded-xl border-[2.5px] border-[#18202d] bg-[#d946ef] text-white font-display text-xs text-center shadow-[0_3px_0_#18202d]">
+            Rare Gem<br>#d946ef (Currency)
+          </div>
+          <div class="p-3 rounded-xl border-[2.5px] border-[#18202d] bg-[#1e2430] text-slate-200 font-display text-xs text-center shadow-[0_3px_0_#18202d]">
+            Code Editor<br>#1e2430 (Monospace)
+          </div>
+        </div>
+      </div>
+
+      <!-- Tactile Buttons Demonstration -->
+      <div class="chunky-panel p-6 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+        <h3 class="font-display text-xl text-[#18202d]">2. BUTTON SIZES & TACTILE STATES (PRESS TO TEST)</h3>
+        <div class="flex flex-wrap items-center gap-4">
+          <button class="chunky-btn chunky-btn-sm chunky-btn-green">Small Green (RUN / Go)</button>
+          <button class="chunky-btn chunky-btn-python">Python Blue (#299bf5)</button>
+          <button class="chunky-btn chunky-btn-indigo">Secondary Indigo (#4f46e5)</button>
+          <button class="chunky-btn chunky-btn-lg chunky-btn-gold">Gold Press (Currency / Reward Only)</button>
+          <button class="chunky-btn chunky-btn-red">Danger Stop</button>
+          <button class="chunky-btn chunky-btn-purple">Mystery Gem</button>
+          <button class="chunky-btn chunky-btn-slate">Secondary Slate</button>
+        </div>
+      </div>
+
+      <!-- Asset Packs Audit (Style Guide Section 5) -->
+      <div class="chunky-panel p-6 bg-[#d5dfe6] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+        <h3 class="font-display text-xl text-[#18202d] flex items-center gap-2">
+          <span>📦</span>
+          <span>ASSET PACK AUDIT (Section 5 of Style Guide)</span>
+        </h3>
+        <p class="font-body text-sm font-bold text-[#334155]">
+          Per instructions: CSS handles all panels, borders, shadows, and buttons. Real vector game assets are flagged below:
+        </p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 rounded-xl bg-white border-[2.5px] border-[#18202d] space-y-2">
+            <div class="font-display text-base text-[#18202d] flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="asset-box w-6 h-6"><img src="assets/PNG/coin.png" class="asset-img" alt="Coin"></div>
+                <div class="asset-box w-6 h-6"><img src="assets/PNG/gems.png" class="asset-img" alt="Gems"></div>
+                <span>1. Currency Icons (Coins & Gems)</span>
+              </div>
+              <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">Asset Integrated (PNG)</span>
+            </div>
+            <p class="font-body font-bold text-xs text-[#64748b]">
+              Integrated <code>coin.png</code> and <code>gems.png</code> into HUD pills, session rewards, and floating feedback animations.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-white border-[2.5px] border-[#18202d] space-y-2">
+            <div class="font-display text-base text-[#18202d] flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <div class="asset-badge-slot !w-7 !h-7 bg-[#fef08a]"><img src="assets/PNG/BADGE1.png" class="asset-img" alt=""></div>
+                <div class="asset-badge-slot !w-7 !h-7 bg-[#dcfce7]"><img src="assets/PNG/B2.png" class="asset-img" alt=""></div>
+                <div class="asset-badge-slot !w-7 !h-7 bg-[#bae6fd]"><img src="assets/PNG/B3.png" class="asset-img" alt=""></div>
+                <div class="asset-badge-slot !w-7 !h-7 bg-[#ccfbf1]"><img src="assets/PNG/B4.png" class="asset-img" alt=""></div>
+                <span>2. Named Badges & Tiers</span>
+              </div>
+              <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">8 Badges + Shelf</span>
+            </div>
+            <p class="font-body font-bold text-xs text-[#64748b]">
+              Named badges (First Flight, Loop Voyager, Bug Whisperer, Pandas Sleuth), generic tier medallions (B5–b8), and <code>shelve.png</code> trophy backdrop.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-white border-[2.5px] border-[#18202d] space-y-2">
+            <div class="font-display text-base text-[#18202d] flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="asset-box w-7 h-7"><img src="assets/PNG/rocket.png" class="asset-img" alt=""></div>
+                <div class="asset-box w-7 h-7"><img src="assets/PNG/tiltrocket.png" class="asset-img" alt=""></div>
+                <span>3. Rockets & Mystery Blueprint</span>
+              </div>
+              <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">Rockets Integrated</span>
+            </div>
+            <p class="font-body font-bold text-xs text-[#64748b]">
+              <code>rocket.png</code> on brand header/dashboard widget and <code>tiltrocket.png</code> flying motion moment on session celebration.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-white border-[2.5px] border-[#18202d] space-y-2">
+            <div class="font-display text-base text-[#18202d] flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <div class="asset-mascot-box w-7 h-7"><img src="assets/PNG/pointleft.png" class="asset-img" alt=""></div>
+                <div class="asset-mascot-box w-7 h-7"><img src="assets/PNG/idlesmile.png" class="asset-img" alt=""></div>
+                <div class="asset-mascot-box w-7 h-7"><img src="assets/PNG/shappy.png" class="asset-img" alt=""></div>
+                <div class="asset-mascot-box w-7 h-7"><img src="assets/PNG/angry.png" class="asset-img" alt=""></div>
+                <span>4. 5 Mascot Poses & Avatars</span>
+              </div>
+              <span class="hud-badge bg-[#86efac] text-[#166534] text-xs">All Poses Live</span>
+            </div>
+            <p class="font-body font-bold text-xs text-[#64748b]">
+              <code>pointleft/pointright</code> for Socratic guidance, <code>idlesmile</code> for resting, <code>shappy</code> for celebration, <code>angry</code> strictly for system blocking errors, and <code>av1–av5</code> student avatars.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Architectural & Design Tradeoffs Flagged (User prompt item 4) -->
+      <div class="chunky-panel p-6 bg-[#fffbeb] border-[3.5px] border-[#b45309] rounded-[22px] shadow-[0_5px_0_#18202d] space-y-4">
+        <h3 class="font-display text-xl text-[#92400e] flex items-center gap-2">
+          <span>⚠️</span>
+          <span>CRITICAL DESIGN TRADEOFFS FLAGGED (FULL CHUNKY OVERRIDE VS SRS)</span>
+        </h3>
+        
+        <div class="space-y-3 font-body font-bold text-sm text-[#78350f]">
+          <div class="p-3 bg-white rounded-xl border-[2px] border-[#b45309]">
+            <strong>1. Active Coding Legibility vs Chunky Playfulness:</strong><br>
+            While headers, frames, and buttons use Lilita One and candy colors, the interior code editor text <em>must</em> remain an ultra-clean monospace font (IBM Plex Mono / Cascadia) with comfortable line-height (1.7) and high-contrast dark slate backdrop. Putting cartoon typography inside the code input itself would severely harm syntax recognition for 11–16 year olds.
+          </div>
+
+          <div class="p-3 bg-white rounded-xl border-[2px] border-[#b45309]">
+            <strong>2. Socratic Error-Hint Distinct Semantic Palette:</strong><br>
+            In candy UI, red is used for Close/Danger, and Green for Play. If the Socratic hint used bright red, students would panic and interpret it as a failure alarm. We assigned it a warm golden-parchment and soft indigo palette with golden-ratio (~1:1.618) width, making it feel like an inviting clue card.
+          </div>
+
+          <div class="p-3 bg-white rounded-xl border-[2px] border-[#b45309]">
+            <strong>3. Vertical Real Estate on School Chromebooks:</strong><br>
+            3.5px–4.5px borders and 7px shadows add height. We engineered compact HUD pills and responsive toolbars so the code editor and terminal always get maximum vertical space.
+          </div>
+
+          <div class="p-3 bg-white rounded-xl border-[2px] border-[#b45309]">
+            <strong>4. Dense Tabular Data vs. Thick Borders (Data Science):</strong><br>
+            In pandas dataframes with 6+ columns, placing 3.5px borders around every individual cell quickly crowds out numbers and causes horizontal clipping. Solution: The exterior table frame and header row use the full chunky candy treatment (gold fill, ink borders, hard shadow), while interior cell dividers use lightweight 1px–1.5px lines with horizontal scroll (<code>overflow-x: auto</code>) to preserve data scannability.
+          </div>
+
+          <div class="p-3 bg-white rounded-xl border-[2px] border-[#b45309]">
+            <strong>5. Cell-Based Shadow Stacking &amp; Scrolling Fatigue:</strong><br>
+            Stacking 7px drop shadows across 15+ consecutive notebook cells creates visual heavy-handedness. We tuned cell blocks to 3.5px borders with 4.5px shadows, highlighting only the currently active cell with a green candy border, and integrated floating "+ Add Cell" divider affordances between blocks.
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- ======================================================================
+         SCREEN 7: AUTHENTICATION & ONBOARDING (REQ-AUTH-01 ~ REQ-AUTH-05)
+         Covers Student Login with disambiguation, adult email/magic link auth,
+         facilitator student onboarding ticket, and parent link confirmation.
+         ====================================================================== -->
+    <section id="screen-auth" class="w-full space-y-6 hidden">
+      
+      <!-- Top Auth Navigation Header -->
+      <div class="chunky-panel p-5 bg-[#ffffff] border-[3.5px] border-[#18202d] rounded-[22px] shadow-[0_5px_0_#18202d] flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <span class="hud-badge bg-[#fed034] text-[#854d0e] text-xs">AUTHENTICATION SYSTEM</span>
+          <h2 class="font-display text-2xl md:text-3xl text-[#18202d]">
+            SKY EXPLORERS ACCESS & ONBOARDING
+          </h2>
+          <p class="font-body text-xs md:text-sm font-bold text-[#64748b]">
+            Compliant with DPDP Act minors' data guidelines (REQ-AUTH-01 through REQ-AUTH-05)
+          </p>
+        </div>
+
+        <!-- Sub-Tabs Switcher -->
+        <div class="flex items-center gap-1.5 bg-[#18202d] p-1.5 rounded-2xl border-[2.8px] border-[#18202d] shadow-[0_3px_0_#18202d] flex-wrap justify-center">
+          <button id="auth-tab-btn-student-login" onclick="switchAuthTab('student-login')" class="chunky-tab active !text-xs !py-1.5 !px-3">
+            👦 STUDENT LOGIN
+          </button>
+          <button id="auth-tab-btn-admin-login" onclick="switchAuthTab('admin-login')" class="chunky-tab !text-xs !py-1.5 !px-3">
+            👩‍🏫 FACILITATOR / ADMIN
+          </button>
+          <button id="auth-tab-btn-create-student" onclick="switchAuthTab('create-student')" class="chunky-tab !text-xs !py-1.5 !px-3">
+            ➕ CREATE STUDENT
+          </button>
+          <button id="auth-tab-btn-parent-link" onclick="switchAuthTab('parent-link')" class="chunky-tab !text-xs !py-1.5 !px-3">
+            👨‍👩‍👧 PARENT LINK
+          </button>
+        </div>
+      </div>
+
+      <!-- ====================================================================
+           PANE 1: STUDENT LOGIN (REQ-AUTH-02)
+           First name + 2-word secret code, with mock disambiguation state
+           ==================================================================== -->
+      <div id="auth-pane-student-login" class="w-full">
+        
+        <div class="chunky-panel p-6 md:p-8 bg-[#ffffff] border-[4px] border-[#18202d] shadow-[0_7px_0_#18202d] rounded-[26px] max-w-[580px] mx-auto space-y-5">
+          
+          <div class="text-center space-y-1">
+            <div class="w-16 h-16 mx-auto rounded-2xl bg-[#299bf5] border-[3px] border-[#18202d] shadow-[0_3.5px_0_#18202d] flex items-center justify-center mb-2 asset-box">
+              <img src="assets/PNG/rocket.png" class="asset-img" alt="Mission Launch Rocket">
+            </div>
+            <span class="hud-badge bg-[#eff6ff] text-[#1d4ed8] text-xs">STUDENT CHECK-IN</span>
+            <h3 class="font-display text-3xl text-[#18202d]">
+              READY FOR MISSION LAUNCH?
+            </h3>
+            <p class="font-body text-xs font-bold text-[#64748b]">
+              Enter your first name and your assigned two-word secret code.
+            </p>
+          </div>
+
+          <!-- Error Banner (Real blocking error, distinct from gentle Socratic hints) -->
+          <div id="studentLoginError" class="chunky-error-banner hidden flex items-center gap-2">
+            <div class="asset-box w-7 h-7 flex-shrink-0"><img src="assets/PNG/angry.png" class="asset-img" alt="Error Mascot"></div>
+            <span>Error message goes here</span>
+          </div>
+
+          <!-- Login Inputs Form -->
+          <div class="space-y-4 font-body font-bold text-sm">
+            <div>
+              <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider">
+                👤 Student First Name
+              </label>
+              <input id="studentLoginFirstName" type="text" value="Arjun" placeholder="e.g. Arjun" class="chunky-input w-full">
+              <span class="text-[11px] text-[#64748b] font-normal block mt-1">No full name required — first name only (REQ-AUTH-05).</span>
+            </div>
+
+            <div>
+              <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider">
+                🔑 Two-Word Secret Code
+              </label>
+              <input id="studentLoginSecretCode" type="text" value="COSMIC-FALCON" placeholder="e.g. COSMIC-FALCON" class="chunky-input w-full uppercase tracking-wider font-code">
+              <span class="text-[11px] text-[#64748b] font-normal block mt-1">Found on the paper pass card handed by your facilitator.</span>
+            </div>
+          </div>
+
+          <!-- DISAMBIGUATION STATE (REQ-AUTH-02) -->
+          <div id="studentDisambiguationBox" class="p-4 rounded-2xl bg-[#fffbeb] border-[2.8px] border-[#d97706] shadow-[0_3.5px_0_#18202d] space-y-3 hidden">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🔎</span>
+              <span class="font-display text-sm text-[#92400e]">
+                DISAMBIGUATION REQUIRED (REQ-AUTH-02)
+              </span>
+            </div>
+            <p class="font-body text-xs font-bold text-[#78350f]">
+              More than one "Arjun" is registered in our flight database! Pick your school &amp; cohort below to confirm which Arjun you are:
+            </p>
+
+            <div class="space-y-2">
+              <!-- Option A: Arjun Patel (Alpha) -->
+              <div id="disambiguation-alpha" onclick="resolveDisambiguation('alpha')" class="disambiguation-card">
+                <div>
+                  <div class="font-display text-base text-[#18202d]">Arjun Patel</div>
+                  <div class="font-body text-xs font-bold text-[#64748b]">Oakridge International • Grade 7 • Cohort Alpha (Python)</div>
+                </div>
+                <button class="chunky-btn chunky-btn-sm chunky-btn-indigo">SELECT</button>
+              </div>
+
+              <!-- Option B: Arjun Mehta (Beta) -->
+              <div id="disambiguation-beta" onclick="resolveDisambiguation('beta')" class="disambiguation-card">
+                <div>
+                  <div class="font-display text-base text-[#18202d]">Arjun Mehta</div>
+                  <div class="font-body text-xs font-bold text-[#64748b]">Delhi Public School • Grade 8 • Cohort Beta (Data Science L1)</div>
+                </div>
+                <button class="chunky-btn chunky-btn-sm chunky-btn-slate">SELECT</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Launch Button -->
+          <button onclick="handleStudentLogin()" class="chunky-btn chunky-btn-lg chunky-btn-green w-full">
+            ▶ LAUNCH MISSIONS
+          </button>
+
+          <!-- Interactive State Testers for Pair Programming Review -->
+          <div class="p-3 bg-[#fefce8] border-dashed border-[2px] border-[#ca8a04] rounded-xl space-y-2 text-center mt-3">
+            <span class="hud-badge bg-[#fef08a] text-[#854d0e] text-[10px] font-display">
+              🧪 [DEV ONLY: QA TEST BENCH]
+            </span>
+            <span class="text-[11px] font-bold text-[#854d0e] uppercase tracking-wider block">
+              Simulate Login States (Gated in Production):
+            </span>
+            <div class="flex flex-wrap items-center justify-center gap-2">
+              <button onclick="simulateStudentDisambiguation()" class="hud-badge bg-[#ffffff] hover:bg-[#fed034] text-[11px] cursor-pointer">
+                Disambiguation (2 Arjuns)
+              </button>
+              <button onclick="simulateStudentLoginError('wrong-code')" class="hud-badge bg-[#ffffff] hover:bg-[#fecaca] text-[11px] cursor-pointer text-[#991b1b]">
+                Wrong Code Error
+              </button>
+              <button onclick="simulateStudentLoginError('not-found')" class="hud-badge bg-[#ffffff] hover:bg-[#fecaca] text-[11px] cursor-pointer text-[#991b1b]">
+                Name Not Found Error
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ====================================================================
+           PANE 2: FACILITATOR / ADMIN LOGIN (REQ-AUTH-03)
+           Calmer, utilitarian adult screen with email, password & magic link
+           ==================================================================== -->
+      <div id="auth-pane-admin-login" class="w-full hidden">
+        
+        <div class="admin-auth-panel p-6 md:p-8 max-w-[520px] mx-auto space-y-5">
+          
+          <div class="text-left space-y-1 pb-3 border-b-[2px] border-[#cbd5e1]">
+            <span class="hud-badge bg-[#e2e8f0] text-[#334155] text-xs">STAFF PORTAL</span>
+            <h3 class="font-display text-2xl md:text-3xl text-[#18202d]">
+              FACILITATOR &amp; ADMIN LOGIN
+            </h3>
+            <p class="font-body text-xs font-bold text-[#64748b]">
+              Standard credential authentication or passwordless magic link (REQ-AUTH-03).
+            </p>
+          </div>
+
+          <!-- Error Banner -->
+          <div id="facLoginError" class="chunky-error-banner hidden flex items-center gap-2">
+            <div class="asset-box w-7 h-7 flex-shrink-0"><img src="assets/PNG/angry.png" class="asset-img" alt="Error Mascot"></div>
+            <span>Error message</span>
+          </div>
+
+          <!-- Form -->
+          <div class="space-y-4 font-body font-bold text-sm">
+            <div>
+              <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider">
+                Staff Email Address
+              </label>
+              <input id="facLoginEmail" type="email" value="priya.sharma@skyexplorers.org" placeholder="name@skyexplorers.org" class="chunky-input w-full font-body">
+            </div>
+
+            <div>
+              <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider flex items-center justify-between">
+                <span>Password</span>
+                <a href="#" onclick="showToast('Password reset link sent to registered email'); return false;" class="text-[11px] text-[#2563eb] hover:underline">Forgot?</a>
+              </label>
+              <input id="facLoginPassword" type="password" value="••••••••••••" placeholder="Enter password" class="chunky-input w-full font-code">
+            </div>
+          </div>
+
+          <!-- Primary Sign-In -->
+          <button onclick="handleFacilitatorLoginSubmit()" class="chunky-btn chunky-btn-green w-full">
+            SIGN IN WITH PASSWORD
+          </button>
+
+          <!-- Divider -->
+          <div class="relative flex items-center justify-center my-3">
+            <div class="border-t-[2px] border-[#e2e8f0] w-full"></div>
+            <span class="bg-white px-3 text-[11px] font-bold text-[#94a3b8] uppercase tracking-wider relative z-10">
+              OR USE MAGIC LINK
+            </span>
+          </div>
+
+          <!-- Magic Link Button -->
+          <button onclick="handleFacilitatorMagicLink()" class="chunky-btn chunky-btn-slate w-full">
+            ✉️ SEND ONE-CLICK MAGIC LINK
+          </button>
+
+          <p class="font-body text-[11px] text-center text-[#64748b] font-bold pt-2">
+            🔒 Protected Sky Explorers staff environment. Facilitators monitor live student telemetry and pacing.
+          </p>
+
+        </div>
+
+      </div>
+
+      <!-- ====================================================================
+           PANE 3: FACILITATOR CREATE STUDENT FLOW (REQ-AUTH-01 & REQ-AUTH-05)
+           Form with strict minors' data boundaries and system-generated code ticket
+           ==================================================================== -->
+      <div id="auth-pane-create-student" class="w-full hidden">
+        
+        <div class="chunky-panel p-6 md:p-8 bg-[#ffffff] border-[3.5px] border-[#18202d] shadow-[0_5px_0_#18202d] rounded-[24px] max-w-[640px] mx-auto space-y-6">
+          
+          <div class="space-y-1">
+            <span class="hud-badge bg-[#bbf7d0] text-[#14532d] text-xs">FACILITATOR ROSTER TOOL</span>
+            <h3 class="font-display text-2xl md:text-3xl text-[#18202d]">
+              ONBOARD NEW STUDENT &amp; GENERATE PASS
+            </h3>
+            <p class="font-body text-xs font-bold text-[#64748b]">
+              Facilitator sets up student record; system generates unique secret code (REQ-AUTH-01).
+            </p>
+          </div>
+
+          <!-- DPDP MINORS PRIVACY NOTICE (REQ-AUTH-05) -->
+          <div class="p-3.5 rounded-xl bg-[#eff6ff] border-[2px] border-[#299bf5] text-xs font-body font-bold text-[#1e40af] flex items-center gap-3">
+            <span class="text-2xl flex-shrink-0">🛡️</span>
+            <div>
+              <div class="font-display text-sm text-[#1e3a8a]">DPDP ACT MINORS' PRIVACY ASSURANCE</div>
+              <div>
+                Only first name, grade, school, and cohort are recorded. Zero personal contact data (no student email, phone, or DOB) is collected.
+              </div>
+            </div>
+          </div>
+
+          <!-- Error banner -->
+          <div id="createStudentError" class="chunky-error-banner hidden flex items-center gap-2">
+            <div class="asset-box w-7 h-7 flex-shrink-0"><img src="assets/PNG/angry.png" class="asset-img" alt="Error Mascot"></div>
+            <span>Error message</span>
+          </div>
+
+          <!-- Registration Form -->
+          <form onsubmit="handleCreateStudentSubmit(event)" class="space-y-4 font-body font-bold text-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
+              <div>
+                <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider">
+                  Student First Name *
+                </label>
+                <input id="newStudentFirstName" type="text" value="Rhea" placeholder="e.g. Rhea" class="chunky-input w-full" required>
+              </div>
+
+              <div>
+                <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider">
+                  Grade Level *
+                </label>
+                <select id="newStudentGrade" class="chunky-input w-full bg-white">
+                  <option value="Grade 6">Grade 6</option>
+                  <option value="Grade 7" selected>Grade 7</option>
+                  <option value="Grade 8">Grade 8</option>
+                  <option value="Grade 9">Grade 9</option>
+                  <option value="Grade 10">Grade 10</option>
+                  <option value="Grade 11">Grade 11</option>
+                  <option value="Grade 12">Grade 12</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider">
+                  School *
+                </label>
+                <select id="newStudentSchool" class="chunky-input w-full bg-white">
+                  <option value="Oakridge International" selected>Oakridge International</option>
+                  <option value="Delhi Public School">Delhi Public School</option>
+                  <option value="Ryan Global School">Ryan Global School</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider">
+                  Enrolled Cohort *
+                </label>
+                <select id="newStudentCohort" class="chunky-input w-full bg-white">
+                  <option value="Cohort Alpha (Python)" selected>Cohort Alpha (Python Programming)</option>
+                  <option value="Cohort Beta (Data Science L1)">Cohort Beta (Data Science L1)</option>
+                  <option value="Cohort Gamma (Python)">Cohort Gamma (Python Programming)</option>
+                </select>
+              </div>
+
+            </div>
+
+            <button type="submit" class="chunky-btn chunky-btn-lg chunky-btn-green w-full mt-2">
+              ✨ GENERATE CREDENTIAL PASS
+            </button>
+          </form>
+
+          <!-- GENERATED SECRET CODE CONFIRMATION TICKET (The "Hand code to student" moment) -->
+          <div id="createdStudentTicket" class="secret-code-ticket p-6 space-y-4 hidden">
+            
+            <div class="flex items-center justify-between pb-2 border-b-[2px] border-[#cbd5e1]">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🎟️</span>
+                <span class="font-display text-lg text-[#18202d]">OFFICIAL STUDENT CREDENTIAL PASS</span>
+              </div>
+              <span class="hud-badge bg-[#dcfce7] text-[#15803d] text-xs">READY FOR HANDOUT</span>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <div class="asset-avatar-circle w-12 h-12 flex-shrink-0"><img src="assets/PNG/av5.png" class="asset-img" alt="Student"></div>
+              <div class="space-y-0.5">
+                <div class="text-xs font-bold text-[#64748b] uppercase">STUDENT IDENTITY</div>
+                <div id="ticketStudentName" class="font-display text-2xl text-[#18202d]">Rhea</div>
+                <div id="ticketStudentDetails" class="font-body text-xs font-bold text-[#475569]">Grade 7 • Oakridge International (Cohort Alpha)</div>
+              </div>
+            </div>
+
+            <!-- Prominent Secret Code -->
+            <div class="secret-code-display">
+              <div>
+                <span class="text-[11px] font-bold text-[#92400e] uppercase tracking-wider block">SYSTEM-GENERATED SECRET CODE (REQ-AUTH-01)</span>
+                <span id="ticketSecretCode" class="font-display text-3xl md:text-4xl text-[#b45309] tracking-wider">
+                  NEBULA-TIGER
+                </span>
+              </div>
+              <button onclick="copyGeneratedSecretCode()" class="chunky-btn chunky-btn-sm chunky-btn-green">
+                📋 COPY
+              </button>
+            </div>
+
+            <!-- Print & Handout Options -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <span class="text-xs font-bold text-[#64748b]">
+                ✂️ Hand this two-word pass to the student. No password setup required.
+              </span>
+              <button onclick="printStudentPassSlip()" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+                🖨️ PRINT PASS SLIP
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ====================================================================
+           PANE 4: PARENT LINK ACCOUNT SCREEN (REQ-AUTH-04)
+           Single code-entry with student visual verification confirmation state
+           ==================================================================== -->
+      <div id="auth-pane-parent-link" class="w-full hidden">
+        
+        <div class="chunky-panel p-6 md:p-8 bg-[#ffffff] border-[4px] border-[#18202d] shadow-[0_7px_0_#18202d] rounded-[26px] max-w-[560px] mx-auto space-y-5">
+          
+          <div class="text-center space-y-1">
+            <div class="w-16 h-16 mx-auto rounded-2xl bg-[#fed034] border-[3px] border-[#18202d] shadow-[0_3.5px_0_#18202d] flex items-center justify-center text-3xl mb-2">
+              👨‍👩‍👧
+            </div>
+            <span class="hud-badge bg-[#fef08a] text-[#854d0e] text-xs">GUARDIAN ONBOARDING</span>
+            <h3 class="font-display text-3xl text-[#18202d]">
+              LINK YOUR CHILD'S ACCOUNT
+            </h3>
+            <p class="font-body text-xs font-bold text-[#64748b]">
+              Enter the unique linking code shared by your child's facilitator (REQ-AUTH-04).
+            </p>
+          </div>
+
+          <!-- Error banner -->
+          <div id="parentLinkError" class="chunky-error-banner hidden flex items-center gap-2">
+            <div class="asset-box w-7 h-7 flex-shrink-0"><img src="assets/PNG/angry.png" class="asset-img" alt="Error Mascot"></div>
+            <span>Error message</span>
+          </div>
+
+          <!-- Code Input -->
+          <div class="space-y-3 font-body font-bold text-sm">
+            <div>
+              <label class="block text-xs uppercase text-[#475569] mb-1 font-display tracking-wider">
+                School-Issued Link Code
+              </label>
+              <input id="parentLinkCode" type="text" value="SE-PAR-9041" placeholder="e.g. SE-PAR-9041" class="chunky-input w-full uppercase tracking-wider font-code">
+              <span class="text-[11px] text-[#64748b] font-normal block mt-1">
+                Parent accounts connect via facilitator code, never by searching minor records directly.
+              </span>
+            </div>
+
+            <button onclick="handleParentLinkSubmit()" class="chunky-btn chunky-btn-green w-full">
+              FIND STUDENT &amp; VERIFY ▶
+            </button>
+          </div>
+
+          <!-- CONFIRMATION STATE: Visual Child Verification before proceeding -->
+          <div id="parentLinkConfirmBox" class="p-5 rounded-2xl bg-[#f0fdf4] border-[2.8px] border-[#22c55e] shadow-[0_3.5px_0_#18202d] space-y-4 hidden">
+            
+            <div class="flex items-center gap-2">
+              <span class="text-xl">✅</span>
+              <span class="font-display text-sm text-[#15803d]">
+                STUDENT RECORD MATCHED
+              </span>
+            </div>
+
+            <!-- Child Profile Card Preview -->
+            <div class="p-4 rounded-xl bg-white border-[2px] border-[#18202d] flex items-center gap-4">
+              <div class="asset-avatar-circle w-14 h-14 border-[2.5px] border-[#18202d] shadow-[0_2.5px_0_#18202d] flex-shrink-0">
+                <img src="assets/PNG/av1.png" class="asset-img" alt="Arjun Patel">
+              </div>
+              <div class="space-y-0.5">
+                <h4 class="font-display text-xl text-[#18202d]">Arjun Patel</h4>
+                <div class="font-body text-xs font-bold text-[#475569]">Grade 7 • Oakridge International</div>
+                <div class="hud-badge bg-[#eff6ff] text-[#1d4ed8] text-[10px]">
+                  Cohort Alpha: Python &amp; Data Science L1
+                </div>
+              </div>
+            </div>
+
+            <p class="font-body text-xs font-bold text-[#166534]">
+              Please visually confirm this is your child before proceeding to the read-only portal.
+            </p>
+
+            <button onclick="confirmParentLink()" class="chunky-btn chunky-btn-green w-full">
+              ✅ CONFIRM &amp; ENTER PARENT PORTAL
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+  <!-- ========================================================================
+       4. MODALS & POPUPS
+       ======================================================================== -->
+  
+  <!-- Dataset Preview Modal (First 5 Rows DataFrame View) -->
+  <div id="datasetPreviewModal" class="chunky-modal-backdrop hidden">
+    <div class="chunky-modal-dialog p-6 bg-white space-y-4 max-w-2xl w-full">
+      <div class="flex items-center justify-between pb-3 border-b-[3px] border-[#18202d]">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">👁️</span>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="hud-badge bg-[#e0e7ff] text-[#4338ca] text-[10px]">HEAD (5 ROWS)</span>
+              <span id="previewDatasetCycle" class="text-xs font-bold text-[#64748b]">Cycle 3 Curriculum VFS</span>
+            </div>
+            <h3 id="previewDatasetFilename" class="font-display text-xl text-[#18202d] font-code">
+              telemetry_cycle3.csv
+            </h3>
+          </div>
+        </div>
+        <button onclick="closeDatasetPreviewModal()" class="chunky-btn chunky-btn-sm chunky-btn-red !w-8 !h-8 !p-0">
+          ✕
+        </button>
+      </div>
+
+      <!-- Chunky DataFrame 5-Row Table -->
+      <div id="previewDataFrameContainer" class="chunky-dataframe-container max-h-[300px] overflow-auto">
+        <!-- Dynamically rendered table -->
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#e2e8f0]">
+        <span id="previewDatasetMeta" class="text-xs font-bold text-[#64748b]">Showing 5 of 150 records • 5 columns • 12.4 KB</span>
+        <div class="flex items-center gap-2">
+          <button onclick="closeDatasetPreviewModal()" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+            CLOSE
+          </button>
+          <button id="previewInsertBtn" onclick="insertDatasetLoadCodeFromModal()" class="chunky-btn chunky-btn-sm chunky-btn-green">
+            📥 INSERT LOAD CODE
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Peek Code Modal (Facilitator REQ 3.7) -->
+  <div id="peekCodeModal" class="chunky-modal-backdrop hidden">
+    <div class="chunky-modal-dialog p-6 bg-white space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b-[3px] border-[#18202d]">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">👁️</span>
+          <h3 id="peekStudentName" class="font-display text-xl text-[#18202d]">
+            Live Peek: Arjun Patel (7th Grade)
+          </h3>
+        </div>
+        <button onclick="closePeekModal()" class="chunky-btn chunky-btn-sm chunky-btn-red !w-8 !h-8 !p-0">
+          ✕
+        </button>
+      </div>
+
+      <div class="bg-[#1e2430] p-4 rounded-xl border-[3px] border-[#18202d] max-h-[360px] overflow-y-auto">
+        <pre id="peekCodeContent" class="font-code text-xs md:text-sm text-[#818cf8] whitespace-pre-wrap leading-relaxed">
+# Loading live code snapshot...
+        </pre>
+      </div>
+
+      <div class="flex items-center justify-between pt-2">
+        <span class="text-xs font-bold text-[#64748b]">Read-only live observation • Student is not interrupted</span>
+        <button onclick="closePeekModal()" class="chunky-btn chunky-btn-sm chunky-btn-indigo">
+          CLOSE PEEK
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session-Complete & Mystery Build Reveal Modal -->
+  <div id="sessionCompleteModal" class="chunky-modal-backdrop hidden">
+    <div class="chunky-modal-dialog p-6 md:p-8 bg-[#fed034] border-[4.5px] border-[#18202d] text-center space-y-5">
+      
+      <div class="flex items-center justify-center gap-4 mx-auto">
+        <!-- Celebration Mascot (shappy.png) -->
+        <div class="w-20 h-20 rounded-3xl bg-[#6fc624] border-[3.5px] border-[#18202d] shadow-[0_4px_0_#18202d] flex items-center justify-center asset-box" title="Celebration Mascot">
+          <img src="assets/PNG/shappy.png" class="asset-img" alt="Session Complete Mascot">
+        </div>
+        <!-- Flying Celebration Rocket (tiltrocket.png) -->
+        <div class="w-20 h-20 rounded-3xl bg-[#299bf5] border-[3.5px] border-[#18202d] shadow-[0_4px_0_#18202d] flex items-center justify-center asset-box" title="Flying Rocket Celebration Moment">
+          <img src="assets/PNG/tiltrocket.png" class="asset-img rocket-fly-anim" alt="Flying Rocket Celebration">
+        </div>
+      </div>
+
+      <div class="space-y-1">
+        <span class="hud-badge bg-white text-[#18202d] text-xs">MISSION ACCOMPLISHED!</span>
+        <h3 class="font-display text-3xl md:text-4xl text-[#18202d]">
+          SESSION 1 COMPLETED!
+        </h3>
+        <p class="font-body font-bold text-sm text-[#451a03]">
+          Amazing! You wrote your very first Python program using print()!
+        </p>
+      </div>
+
+      <!-- Currency & Shard Rewards -->
+      <div class="grid grid-cols-3 gap-3 my-2">
+        <div class="p-3 bg-white rounded-2xl border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex flex-col items-center justify-center">
+          <div class="asset-box w-10 h-10 mb-1">
+            <img src="assets/PNG/coin.png" class="asset-img" alt="Coins">
+          </div>
+          <div class="font-display text-xl text-[#f59e0b]">+150</div>
+          <span class="text-[10px] font-bold text-[#64748b]">COINS</span>
+        </div>
+        <div class="p-3 bg-white rounded-2xl border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex flex-col items-center justify-center">
+          <div class="asset-box w-10 h-10 mb-1">
+            <img src="assets/PNG/gems.png" class="asset-img" alt="Gems">
+          </div>
+          <div class="font-display text-xl text-[#c026d3]">+10</div>
+          <span class="text-[10px] font-bold text-[#64748b]">GEMS</span>
+        </div>
+        <div class="p-3 bg-white rounded-2xl border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex flex-col items-center justify-center">
+          <div class="asset-box w-10 h-10 mb-1">
+            <img src="assets/PNG/tiltrocket.png" class="asset-img" alt="Shards">
+          </div>
+          <div id="mysteryFragmentCount" class="font-display text-xl text-[#2563eb]">1/26</div>
+          <span class="text-[10px] font-bold text-[#64748b]">SHARDS</span>
+        </div>
+      </div>
+
+      <!-- Mystery Build Shard Revealed Banner -->
+      <div class="p-3.5 bg-[#ffffff] rounded-2xl border-[3px] border-[#18202d] text-left flex items-center gap-3">
+        <div class="asset-box w-12 h-12 flex-shrink-0">
+          <img src="assets/PNG/tiltrocket.png" class="asset-img" alt="Blueprint Shard">
+        </div>
+        <div>
+          <div class="font-display text-sm text-[#18202d]">FIRST BLUEPRINT SHARD UNLOCKED!</div>
+          <div class="font-body text-xs font-bold text-[#64748b]">
+            "The Opening Title Screen" added to your <code>Mystery_Build.py</code> file. Build it up every week!
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button onclick="closeSessionCompleteModal(); navigateTo('dashboard');" class="chunky-btn chunky-btn-lg chunky-btn-green w-full">
+          CONTINUE TO DASHBOARD ▶
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification Pill -->
+  <div id="lmsToast" class="chunky-toast hidden-toast">
+    <span>Ready</span>
+  </div>
+
+  <!-- Application Script -->
+  <script src="app.js"></script>
+</body>
+</html>
