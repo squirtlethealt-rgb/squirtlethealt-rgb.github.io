@@ -26,6 +26,20 @@
   <!-- Sky Explorers Design System (Optional local link with full inline fallback) -->
   <link rel="stylesheet" href="design-system.css">
 
+  <!-- Immediate Theme Initializer to prevent flash-of-theme (Default: Light) -->
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem("pyide:theme");
+        if (t === "dark") {
+          document.documentElement.classList.add("theme-dark");
+        } else {
+          document.documentElement.classList.add("theme-light");
+        }
+      } catch (e) {}
+    })();
+  </script>
+
   <style>
     :root {
       --ink: #18202d;
@@ -172,9 +186,273 @@
       background: #1e293b;
       border-color: #299bf5;
     }
+
+    /* =========================================================================
+       PREMIUM LIGHT & DARK THEME SYSTEM (Light Default)
+       ========================================================================= */
+    body.theme-light {
+      background-color: #f1f5f9;
+      background-image: 
+        radial-gradient(rgba(41, 155, 245, 0.16) 1.5px, transparent 1.5px),
+        radial-gradient(rgba(245, 158, 11, 0.14) 1.5px, transparent 1.5px);
+      color: #0f172a;
+    }
+
+    body.theme-light .ide-scroll::-webkit-scrollbar-track {
+      background: #e2e8f0;
+    }
+    body.theme-light .ide-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border: 2px solid #e2e8f0;
+    }
+    body.theme-light .ide-scroll::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    body.theme-light header {
+      background-color: #ffffff !important;
+    }
+    body.theme-light header h1 {
+      color: #0f172a !important;
+    }
+    body.theme-light header .brand-subtext {
+      color: #d97706 !important;
+    }
+
+    body.theme-light .toolbar-card {
+      background-color: #ffffff !important;
+    }
+
+    body.theme-light .theme-pill {
+      background-color: #f8fafc !important;
+      border-color: #18202d !important;
+      color: #0f172a !important;
+    }
+    body.theme-light .theme-pill span,
+    body.theme-light .theme-pill label {
+      color: #0f172a !important;
+    }
+    body.theme-light #currentStudentNameDisplay {
+      color: #0f172a !important;
+    }
+
+    /* Segmented Theme Switch Pills */
+    body.theme-light #themePillDark.pill-inactive span {
+      color: #64748b !important;
+    }
+    body.theme-light #themePillDark.pill-inactive:hover span {
+      color: #0f172a !important;
+    }
+    body.theme-light #themePillLight.pill-active span {
+      color: #18202d !important;
+    }
+    body:not(.theme-light) #themePillLight.pill-inactive span {
+      color: #94a3b8 !important;
+    }
+    body:not(.theme-light) #themePillLight.pill-inactive:hover span {
+      color: #f8fafc !important;
+    }
+    body:not(.theme-light) #themePillDark.pill-active span {
+      color: #091522 !important;
+    }
+
+    body.theme-light select#templateSelect {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #18202d !important;
+    }
+    body.theme-light select#templateSelect option {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+    }
+    body.theme-light select#engineSelect {
+      color: #059669 !important;
+    }
+    body.theme-light select#engineSelect option {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+    }
+    body.theme-light #fontSizeDisplay {
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    body.theme-light #saveStatusIndicator {
+      background-color: #f8fafc !important;
+      border-color: #cbd5e1 !important;
+      color: #475569 !important;
+    }
+
+    body.theme-light .btn-slate {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    body.theme-light .btn-slate:hover:not(:disabled) {
+      background: #cbd5e1;
+    }
+
+    /* Editor in Light Mode */
+    body.theme-light #editorPane {
+      background-color: #ffffff !important;
+    }
+    body.theme-light #editorHeaderBar {
+      background-color: #f8fafc !important;
+      border-bottom-color: #18202d !important;
+    }
+    body.theme-light #activeFileTitle {
+      color: #0f172a !important;
+    }
+    body.theme-light #activeFileTypeBadge {
+      background-color: #e2e8f0 !important;
+      color: #475569 !important;
+      border-color: #cbd5e1 !important;
+    }
+    body.theme-light #editorHeaderBar kbd {
+      background-color: #f1f5f9 !important;
+      color: #b45309 !important;
+      border-color: #cbd5e1 !important;
+    }
+    body.theme-light .editor-inner-wrap {
+      background-color: #ffffff !important;
+    }
+    body.theme-light #lineGutter {
+      background-color: #f8fafc !important;
+      border-right-color: #cbd5e1 !important;
+      color: #64748b !important;
+    }
+    body.theme-light #editorArea {
+      color: #0f172a !important;
+      caret-color: #2563eb !important;
+    }
+    body.theme-light #editorArea::placeholder {
+      color: #94a3b8 !important;
+    }
+    body.theme-light #stdinDrawer {
+      background-color: #f8fafc !important;
+      border-top-color: #18202d !important;
+    }
+    body.theme-light #stdinArea {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+    body.theme-light #editorFooterBar {
+      background-color: #f8fafc !important;
+      border-top-color: #18202d !important;
+      color: #64748b !important;
+    }
+
+    /* Terminal Window Frame in Light Mode (Console Body remains sleek dark) */
+    body.theme-light #consolePane {
+      background-color: #ffffff !important;
+    }
+    body.theme-light #terminalHeaderBar {
+      background-color: #f8fafc !important;
+      border-bottom-color: #18202d !important;
+    }
+    body.theme-light #terminalHeaderTitle {
+      color: #0f172a !important;
+    }
+    body.theme-light #outputStatusTag {
+      color: #475569 !important;
+    }
+    body.theme-light #consolePane button {
+      color: #64748b !important;
+    }
+    body.theme-light #consolePane button:hover {
+      color: #0f172a !important;
+    }
+    body.theme-light #inputBarContainer {
+      background-color: #f8fafc !important;
+      border-top-color: #18202d !important;
+    }
+    body.theme-light #terminalInput {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+    body.theme-light #inputBarContainer span {
+      color: #d97706 !important;
+    }
+
+    /* Sidebar in Light Mode */
+    body.theme-light #fileSidebar {
+      background-color: #ffffff !important;
+    }
+    body.theme-light #fileSidebarHeader {
+      background-color: #f8fafc !important;
+      border-bottom-color: #18202d !important;
+    }
+    body.theme-light #fileSidebarTitle {
+      color: #0f172a !important;
+    }
+    body.theme-light .file-item {
+      background-color: #f8fafc !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+    body.theme-light .file-item:hover {
+      background-color: #f1f5f9 !important;
+    }
+    body.theme-light .file-item.active {
+      background-color: #e0f2fe !important;
+      border-color: #0284c7 !important;
+      color: #0369a1 !important;
+      font-weight: bold;
+    }
+    body.theme-light #fileSidebarFooter {
+      background-color: #f8fafc !important;
+      border-top-color: #18202d !important;
+      color: #64748b !important;
+    }
+
+    /* Modals in Light Mode */
+    body.theme-light #studentModal .modal-card {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+    }
+    body.theme-light #studentModal h2,
+    body.theme-light #studentModal h3 {
+      color: #0f172a !important;
+    }
+    body.theme-light #studentModal p.modal-desc,
+    body.theme-light #studentModal label.modal-label {
+      color: #475569 !important;
+    }
+    body.theme-light #studentNameInput {
+      background-color: #f8fafc !important;
+      color: #0f172a !important;
+      border-color: #18202d !important;
+    }
+    body.theme-light #closeStudentModalBtn {
+      color: #64748b !important;
+    }
+    body.theme-light #closeStudentModalBtn:hover {
+      color: #0f172a !important;
+    }
+    body.theme-light #studentModal .storage-note-box {
+      background-color: #fef3c7 !important;
+      border-color: #fde68a !important;
+      color: #92400e !important;
+    }
+    body.theme-light .student-chip-btn {
+      background-color: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+    body.theme-light .student-chip-btn.active {
+      background-color: #0284c7 !important;
+      color: #ffffff !important;
+    }
+
+    body.theme-light #toastContent {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #18202d !important;
+    }
   </style>
 </head>
-<body class="p-2 sm:p-3 md:p-4 flex flex-col h-screen overflow-hidden">
+<body class="theme-light p-2 sm:p-3 md:p-4 flex flex-col h-screen overflow-hidden">
 
   <!-- ================= TOP HEADER ================= -->
   <header class="chunky-box bg-[#1a2333] p-2.5 sm:p-3.5 mb-2.5 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
@@ -195,14 +473,14 @@
             Milestone 1
           </span>
         </div>
-        <p class="text-[11px] sm:text-xs text-amber-300 font-bold tracking-wide">
+        <p class="brand-subtext text-[11px] sm:text-xs text-amber-300 font-bold tracking-wide">
           The Sky Explorers
         </p>
       </div>
     </div>
 
     <!-- Student Workspace Selector -->
-    <div class="flex items-center gap-2 bg-[#0d141e] border-[2.5px] border-[#18202d] rounded-xl px-2.5 py-1.5 shadow-[0_2px_0_#18202d]">
+    <div class="theme-pill flex items-center gap-2 bg-[#0d141e] border-[2.5px] border-[#18202d] rounded-xl px-2.5 py-1.5 shadow-[0_2px_0_#18202d]">
       <span class="text-sm">👤</span>
       <div class="flex flex-col">
         <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Workspace</span>
@@ -229,7 +507,7 @@
     <!-- Engine Status, Zoom & Layout -->
     <div class="flex items-center gap-2 flex-wrap">
       <!-- Engine Selector (In-Console Interactive Typing vs Pyodide WASM) -->
-      <div class="flex items-center gap-1.5 bg-[#0d141e] border-[2px] border-[#18202d] rounded-xl px-2.5 py-1 shadow-[0_2px_0_#18202d]">
+      <div class="theme-pill flex items-center gap-1.5 bg-[#0d141e] border-[2px] border-[#18202d] rounded-xl px-2.5 py-1 shadow-[0_2px_0_#18202d]">
         <span id="engineStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
         <select id="engineSelect" onchange="switchEngine()" class="bg-transparent text-xs font-bold text-emerald-300 outline-none cursor-pointer" title="Select Python execution engine">
           <option value="skulpt" class="bg-[#0f172a] text-white" selected>⚡ In-Console Input (Interactive)</option>
@@ -237,8 +515,20 @@
         </select>
       </div>
 
+      <!-- Premium Theme Toggle (Light / Dark Mode, Light Default) -->
+      <div id="themeToggleGroup" class="theme-pill flex items-center bg-[#0d141e] border-[2px] border-[#18202d] rounded-xl p-0.5 shadow-[0_2px_0_#18202d] cursor-pointer select-none" onclick="toggleTheme()" title="Switch Theme (Light / Dark)">
+        <div id="themePillLight" class="pill-active flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all duration-200 bg-[#fed034] text-[#18202d] shadow-sm">
+          <span>☀️</span>
+          <span class="tracking-wide">Light</span>
+        </div>
+        <div id="themePillDark" class="pill-inactive flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all duration-200 text-slate-400 hover:text-white">
+          <span>🌙</span>
+          <span class="tracking-wide">Dark</span>
+        </div>
+      </div>
+
       <!-- Font Zoom Controls (Classroom Projector) -->
-      <div class="flex items-center bg-[#0d141e] border-[2px] border-[#18202d] rounded-xl p-0.5 shadow-[0_2px_0_#18202d]">
+      <div class="theme-pill flex items-center bg-[#0d141e] border-[2px] border-[#18202d] rounded-xl p-0.5 shadow-[0_2px_0_#18202d]">
         <button onclick="changeFontSize(-2)" class="px-2 py-1 text-xs font-bold text-slate-300 hover:text-white" title="Decrease Font Size">A-</button>
         <span id="fontSizeDisplay" class="px-1 text-xs font-mono font-bold text-slate-400 border-x border-[#1e293b]">16px</span>
         <button onclick="changeFontSize(2)" class="px-2 py-1 text-xs font-bold text-slate-300 hover:text-white" title="Increase Font Size">A+</button>
@@ -255,7 +545,7 @@
   <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
 
     <!-- IDE Action Toolbar (Run, Reset, Autosave, File management) -->
-    <div class="chunky-box bg-[#16202e] p-2 sm:p-2.5 mb-2.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+    <div class="chunky-box bg-[#16202e] toolbar-card p-2 sm:p-2.5 mb-2.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
       
       <!-- Primary Execution Controls -->
       <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -339,10 +629,10 @@
       <!-- COLLAPSIBLE STUDENT FILES SIDEBAR (Requirement 5) -->
       <aside id="fileSidebar" class="w-full lg:w-64 chunky-box bg-[#111925] flex flex-col shrink-0 overflow-hidden hidden">
         <!-- Sidebar Header -->
-        <div class="bg-[#182333] border-b-[2.5px] border-[#18202d] px-3 py-2 flex items-center justify-between shrink-0">
+        <div id="fileSidebarHeader" class="bg-[#182333] border-b-[2.5px] border-[#18202d] px-3 py-2 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-2">
             <span class="text-sm">📁</span>
-            <span class="font-display text-sm tracking-wide text-white">MY FILES</span>
+            <span id="fileSidebarTitle" class="font-display text-sm tracking-wide text-white">MY FILES</span>
           </div>
           <button onclick="promptCreateNewFile()" class="chunky-btn btn-green btn-sm !px-2 !py-0.5 text-xs" title="Create a new Python file">
             + New .py
@@ -355,7 +645,7 @@
         </div>
 
         <!-- Sidebar Footer & Storage Warning -->
-        <div class="p-2.5 bg-[#0d141e] border-t-[2px] border-[#18202d] text-[10px] text-slate-400 space-y-1 shrink-0">
+        <div id="fileSidebarFooter" class="p-2.5 bg-[#0d141e] border-t-[2px] border-[#18202d] text-[10px] text-slate-400 space-y-1 shrink-0">
           <p class="font-bold text-amber-300">💡 Browser Storage Note:</p>
           <p class="leading-tight text-slate-400">
             Files are saved in this browser. Use <b>Download .zip</b> to back up work before clearing browser data.
@@ -367,7 +657,7 @@
       <div id="editorPane" class="flex-1 flex flex-col min-h-[260px] chunky-box bg-[#131b26] overflow-hidden">
         
         <!-- Editor Header Bar -->
-        <div class="bg-[#1c2738] border-b-[2.5px] border-[#18202d] px-3 py-1.5 flex items-center justify-between shrink-0">
+        <div id="editorHeaderBar" class="bg-[#1c2738] border-b-[2.5px] border-[#18202d] px-3 py-1.5 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-2">
             <span class="text-sm">📄</span>
             <span id="activeFileTitle" class="font-display text-sm tracking-wide text-white">Blank Editor</span>
@@ -383,7 +673,7 @@
         </div>
 
         <!-- Editor Gutter & Textarea Area -->
-        <div class="relative flex-1 flex overflow-hidden bg-[#101722]">
+        <div class="editor-inner-wrap relative flex-1 flex overflow-hidden bg-[#101722]">
           
           <!-- Line Numbers Gutter -->
           <div id="lineGutter" 
@@ -395,7 +685,7 @@
           <textarea id="editorArea" 
                     spellcheck="false" 
                     autocapitalize="off" 
-                    autocomplete="off"
+                    autocomplete="off" 
                     class="flex-1 bg-transparent text-[#f1f5f9] font-code p-3 resize-none outline-none ide-scroll whitespace-pre leading-relaxed overflow-auto"
                     placeholder="# Write your Python code here... (Editor starts blank)"></textarea>
 
@@ -418,7 +708,7 @@
         </div>
 
         <!-- Editor Footer Status -->
-        <div class="bg-[#121924] border-t-[2px] border-[#18202d] px-3 py-1 text-xs text-slate-400 flex items-center justify-between shrink-0">
+        <div id="editorFooterBar" class="bg-[#121924] border-t-[2px] border-[#18202d] px-3 py-1 text-xs text-slate-400 flex items-center justify-between shrink-0">
           <div id="cursorPosition" class="font-mono text-[11px]">Line 1, Col 1</div>
           <div class="font-semibold text-slate-500 text-[11px]">Tab = 4 Spaces • Auto Indent Active</div>
         </div>
@@ -429,12 +719,12 @@
       <div id="consolePane" class="flex-1 lg:max-w-[46%] flex flex-col min-h-[200px] terminal-window overflow-hidden">
         
         <!-- Terminal Header Bar -->
-        <div class="bg-[#131b27] border-b-[2.5px] border-[#18202d] px-3 py-1.5 flex items-center justify-between shrink-0">
+        <div id="terminalHeaderBar" class="bg-[#131b27] border-b-[2.5px] border-[#18202d] px-3 py-1.5 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-2">
             <span class="w-3 h-3 rounded-full bg-red-500 border border-[#18202d]"></span>
             <span class="w-3 h-3 rounded-full bg-amber-400 border border-[#18202d]"></span>
             <span class="w-3 h-3 rounded-full bg-emerald-500 border border-[#18202d]"></span>
-            <span class="font-display text-sm tracking-wide text-slate-200 ml-2">
+            <span id="terminalHeaderTitle" class="font-display text-sm tracking-wide text-slate-200 ml-2">
               OUTPUT TERMINAL
             </span>
           </div>
@@ -479,7 +769,7 @@
 
   <!-- 1. Student Name / Workspace Modal (Requirement 5) -->
   <div id="studentModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
-    <div class="chunky-box bg-[#1a2333] max-w-md w-full p-5 space-y-4">
+    <div class="modal-card chunky-box bg-[#1a2333] max-w-md w-full p-5 space-y-4">
       <div class="flex items-center justify-between pb-2 border-b-2 border-[#18202d]">
         <div class="flex items-center gap-2">
           <span class="text-2xl">👤</span>
@@ -488,12 +778,12 @@
         <button id="closeStudentModalBtn" onclick="closeStudentModal()" class="text-slate-400 hover:text-white font-bold text-lg hidden">✕</button>
       </div>
 
-      <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+      <p class="modal-desc text-xs sm:text-sm text-slate-300 leading-relaxed">
         Enter your Name or Student ID. Each student gets an isolated browser workspace so shared computers keep your work separate!
       </p>
 
       <div class="space-y-2">
-        <label for="studentNameInput" class="text-xs font-bold text-slate-300 block">Student Name / ID:</label>
+        <label for="studentNameInput" class="modal-label text-xs font-bold text-slate-300 block">Student Name / ID:</label>
         <input type="text" id="studentNameInput" 
                class="w-full bg-[#0d141f] text-white font-body px-3.5 py-2.5 rounded-xl border-[2px] border-[#18202d] outline-none focus:border-[#299bf5] text-sm"
                placeholder="e.g. Alex Miller" maxlength="30">
@@ -507,7 +797,7 @@
         </div>
       </div>
 
-      <div class="bg-[#121a26] p-2.5 rounded-xl border border-[#223145] text-[11px] text-amber-300 leading-snug">
+      <div class="storage-note-box bg-[#121a26] p-2.5 rounded-xl border border-[#223145] text-[11px] text-amber-300 leading-snug">
         ⚠️ <b>Important Note:</b> Clearing browser history/cache or using private windows will erase browser-saved files. Use <b>Download .zip</b> regularly to back up your code to your computer.
       </div>
 
@@ -750,6 +1040,58 @@ speed = int("supersonic")
         console.warn("Storage remove error:", err);
       }
     }
+
+    // =========================================================================
+    // 2.5 THEME MANAGEMENT SYSTEM (Light Default with Persistent Toggle)
+    // =========================================================================
+    let currentTheme = "light";
+
+    function initTheme() {
+      // Light theme is the default if not previously set
+      const savedTheme = storageGet("pyide:theme", "light");
+      applyTheme(savedTheme === "dark" ? "dark" : "light", false);
+    }
+
+    function applyTheme(theme, notify = false) {
+      currentTheme = theme;
+      const body = document.body;
+      const pillLight = document.getElementById("themePillLight");
+      const pillDark = document.getElementById("themePillDark");
+
+      if (theme === "light") {
+        body.classList.remove("theme-dark");
+        body.classList.add("theme-light");
+
+        if (pillLight && pillDark) {
+          pillLight.className = "pill-active flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all duration-200 bg-[#fed034] text-[#18202d] shadow-sm";
+          pillDark.className = "pill-inactive flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all duration-200 text-slate-500 hover:text-slate-900";
+        }
+      } else {
+        body.classList.remove("theme-light");
+        body.classList.add("theme-dark");
+
+        if (pillLight && pillDark) {
+          pillLight.className = "pill-inactive flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all duration-200 text-slate-400 hover:text-white";
+          pillDark.className = "pill-active flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all duration-200 bg-[#299bf5] text-[#091522] shadow-sm";
+        }
+      }
+
+      storageSet("pyide:theme", theme);
+
+      if (notify && typeof showToast === "function") {
+        showToast(theme === "light" ? "☀️ Light mode activated" : "🌙 Dark mode activated", "info");
+      }
+    }
+
+    function toggleTheme() {
+      const nextTheme = currentTheme === "light" ? "dark" : "light";
+      applyTheme(nextTheme, true);
+    }
+
+    // Run theme initialization immediately
+    try {
+      initTheme();
+    } catch (e) {}
 
     // =========================================================================
     // 3. STUDENT PROFILE & WORKSPACE (Requirement 5)
@@ -2009,6 +2351,9 @@ open = _vfs_open
     // 11. INITIALIZATION ON PAGE LOAD
     // =========================================================================
     window.addEventListener("DOMContentLoaded", () => {
+      // 0. Ensure user theme preference is applied (Default: Light Theme)
+      initTheme();
+
       // 1. Populate dropdown from MILESTONE_CONFIG (Requirement 1)
       populateLessonDropdown();
 
