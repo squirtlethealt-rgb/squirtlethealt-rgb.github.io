@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SRS — Sky Explorers Unified LMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #16182B;
+    --sub: #4A4E68;
+    --paper: #FFFFFF;
+    --panel: #F7F8FC;
+    --line: #E3E6F0;
+    --blue: #2F6FED;
+    --blue-soft: #EAF0FF;
+    --gold: #F0A63A;
+    --gold-soft: #FFF3E0;
+    --coral: #E85B5B;
+    --coral-soft: #FDEBEB;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #EDEFF7; --sub: #A9AEC7; --paper: #12131F; --panel: #191B2A;
+      --line: #2A2D42; --blue: #6C93F5; --blue-soft: #1C2740; --gold: #F0B65E;
+      --gold-soft: #2E2413; --coral: #F17E7E; --coral-soft: #351E1E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #EDEFF7; --sub: #A9AEC7; --paper: #12131F; --panel: #191B2A;
+    --line: #2A2D42; --blue: #6C93F5; --blue-soft: #1C2740; --gold: #F0B65E;
+    --gold-soft: #2E2413; --coral: #F17E7E; --coral-soft: #351E1E;
+  }
+  html { scroll-padding-top: 24px; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6;
+  }
+  h1, h2, h3 { font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.01em; }
+  code, .id, th.id-col, td.id-col { font-family: 'IBM Plex Mono', monospace; }
+
+  .hero {
+    position: relative; overflow: hidden; padding: 56px 24px 40px;
+    background: radial-gradient(600px 300px at 15% -10%, var(--gold-soft), transparent 60%),
+                radial-gradient(700px 400px at 100% 0%, var(--blue-soft), transparent 55%);
+    border-bottom: 1px solid var(--line);
+  }
+  .hero-inner { max-width: 760px; margin: 0 auto; }
+  .kicker { color: var(--blue); font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .hero h1 { font-size: clamp(28px, 4vw, 40px); margin: 0 0 12px; }
+  .hero p.lede { color: var(--sub); font-size: 17px; max-width: 62ch; margin: 0 0 20px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 14px; color: var(--sub); }
+  .meta-row b { color: var(--ink); }
+
+  .layout { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 220px 1fr; gap: 40px; padding: 40px 24px 100px; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } .toc { display: none; } }
+
+  .toc { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+  .toc a { display: block; color: var(--sub); text-decoration: none; padding: 5px 0; border-left: 2px solid transparent; padding-left: 12px; }
+  .toc a:hover { color: var(--blue); border-left-color: var(--blue); }
+
+  main { max-width: 760px; }
+  section { margin-bottom: 52px; }
+  h2 { font-size: 24px; margin: 0 0 6px; display: flex; align-items: baseline; gap: 10px; }
+  h2 .num { color: var(--blue); font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 500; }
+  h3 { font-size: 17px; margin: 28px 0 10px; color: var(--ink); }
+  p { color: var(--sub); margin: 0 0 14px; max-width: 68ch; }
+  ul, ol { color: var(--sub); padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  strong { color: var(--ink); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 14px 0 22px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--sub); font-weight: 600; font-size: 13px; text-transform: none; }
+  td.id-col, th.id-col { color: var(--blue); white-space: nowrap; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin: 16px 0; }
+  .flag { background: var(--coral-soft); border-left: 3px solid var(--coral); border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
+  .flag p { color: var(--ink); margin: 0; font-size: 14.5px; }
+  .flag b { color: var(--coral); }
+  .decision { background: var(--gold-soft); border-left: 3px solid var(--gold); border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
+  .decision p { color: var(--ink); margin: 0; font-size: 14.5px; }
+
+  pre.mermaid { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; }
+
+  .scroll-x { overflow-x: auto; }
+
+  footer { max-width: 760px; margin: 0 auto; padding: 0 24px 80px; color: var(--sub); font-size: 13px; grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="kicker">Software Requirements Specification — Draft v0.1</div>
+    <h1>Sky Explorers Unified LMS</h1>
+    <p class="lede">A single learning platform covering the Python Programming and Data Science Level 1 courses, built for students aged 11–16 across school and personal devices, with facilitator, parent, and admin views.</p>
+    <div class="meta-row">
+      <div><b>Prepared for:</b> Ayyan, The Sky Explorers</div>
+      <div><b>Status:</b> Draft — open decisions flagged inline</div>
+      <div><b>Scope:</b> Python Programming, Data Science L1 (Drone Program deferred)</div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="toc">
+    <a href="#purpose">1. Purpose &amp; Scope</a>
+    <a href="#roles">2. User Roles</a>
+    <a href="#functional">3. Functional Requirements</a>
+    <a href="#nonfunctional">4. Non-Functional Requirements</a>
+    <a href="#architecture">5. Architecture</a>
+    <a href="#data">6. Data Model</a>
+    <a href="#design">7. Visual Design Direction</a>
+    <a href="#open">8. Open Decisions</a>
+    <a href="#future">9. Future Scope</a>
+  </nav>
+
+  <main>
+
+    <section id="purpose">
+      <h2><span class="num">01</span> Purpose &amp; Scope</h2>
+      <p>This document specifies requirements for a browser-based LMS unifying The Sky Explorers' Python Programming and Data Science Level 1 courses under one platform, with the Electronics and Drone Program curricula onboarding in later phases. The platform must serve students directly, give facilitators a way to run and monitor live sessions, give parents visibility into progress, and give admin/ops a way to manage cohorts across schools.</p>
+      <p>The Drone Program is explicitly out of scope for this version — hardware platform (DroneBlocks / CoDrone EDU / Tello) is undecided, and drone-specific block-coding UI is deferred until that decision closes.</p>
+    </section>
+
+    <section id="roles">
+      <h2><span class="num">02</span> User Roles</h2>
+      <table>
+        <tr><th>Role</th><th>Description</th><th>Key permissions</th></tr>
+        <tr><td><b>Student</b></td><td>Enrolled kid, grade 6–12, mixed device access</td><td>Own sessions, files, homework, progress</td></tr>
+        <tr><td><b>Facilitator</b></td><td>Runs live sessions in-person or online</td><td>View/manage roster, see live student code, mark homework, control session pacing</td></tr>
+        <tr><td><b>Parent</b></td><td>Linked to one or more students</td><td>Read-only progress, homework status, upcoming sessions</td></tr>
+        <tr><td><b>Admin/Ops</b></td><td>Sky Explorers staff</td><td>Manage schools, cohorts, facilitator assignment, course content, reporting across cohorts</td></tr>
+      </table>
+    </section>
+
+    <section id="functional">
+      <h2><span class="num">03</span> Functional Requirements</h2>
+
+      <h3>3.1 Authentication &amp; Onboarding</h3>
+      <div class="flag"><p><b>Flag:</b> first-name + self-chosen secret key collides across a class and offers no real access control. Recommendation below changes the original ask slightly — confirm before build.</p></div>
+      <table class="scroll-x">
+        <tr><th class="id-col">ID</th><th>Requirement</th></tr>
+        <tr><td class="id-col">REQ-AUTH-01</td><td>Facilitator or admin creates the student record at cohort setup: first name, grade, school, cohort. System generates a unique, memorable secret code (e.g. two-word phrase) — not user-chosen — to avoid collisions.</td></tr>
+        <tr><td class="id-col">REQ-AUTH-02</td><td>Student logs in with first name + assigned secret code; system disambiguates by cohort/school if first names repeat.</td></tr>
+        <tr><td class="id-col">REQ-AUTH-03</td><td>Facilitator and admin accounts use standard email + password (or magic link) auth.</td></tr>
+        <tr><td class="id-col">REQ-AUTH-04</td><td>Parent account links to a student via a code shared by the facilitator/school, not by searching student records directly.</td></tr>
+        <tr><td class="id-col">REQ-AUTH-05</td><td>No student personal data beyond first name, grade, and school is collected at registration (DPDP Act minors' data consideration — see §4).</td></tr>
+      </table>
+
+      <h3>3.2 Course &amp; Session Navigation</h3>
+      <table class="scroll-x">
+        <tr><th class="id-col">ID</th><th>Requirement</th></tr>
+        <tr><td class="id-col">REQ-CRS-01</td><td>Student sees only their enrolled course(s) and current/past sessions; future sessions are locked/hidden to preserve reveal-based mechanics (e.g. Mystery Build).</td></tr>
+        <tr><td class="id-col">REQ-CRS-02</td><td>Each session has exactly two files: an Activity file (in-session work) and, when assigned, a Homework file — presented as tabs, not a folder tree.</td></tr>
+        <tr><td class="id-col">REQ-CRS-03</td><td>Facilitator can advance/unlock the next session for their whole cohort at once.</td></tr>
+      </table>
+
+      <h3>3.3 Python Interpreter Environment</h3>
+      <table class="scroll-x">
+        <tr><th class="id-col">ID</th><th>Requirement</th></tr>
+        <tr><td class="id-col">REQ-PY-01</td><td>Python executes client-side via Pyodide (WASM); no code is sent to a server to run.</td></tr>
+        <tr><td class="id-col">REQ-PY-02</td><td>Each student's virtual filesystem persists per session; Activity/Homework files auto-save on pause (not on explicit save) to survive interruption.</td></tr>
+        <tr><td class="id-col">REQ-PY-03</td><td>Saved state syncs to the backend so a student can resume on a different device (school → home).</td></tr>
+        <tr><td class="id-col">REQ-PY-04</td><td>The Mystery Build file is a distinct, protected file type: it persists and accumulates across all 26 sessions and is never visible in a future/locked session's view.</td></tr>
+        <tr><td class="id-col">REQ-PY-05</td><td>On run, the currently-executing line is highlighted; on an error, the failing line is highlighted (Thonny-inspired). This is a lightweight visual cue, not a full stepper — see §9 for the deferred step-through debugger.</td></tr>
+        <tr><td class="id-col">REQ-PY-06</td><td>Editor and output sit in one fixed split (code above, output below); no REPL/command-echo concept — output only, nothing to type or learn beyond code and Run.</td></tr>
+        <tr><td class="id-col">REQ-PY-07</td><td>Pasting code into the editor is disabled (Activity, Homework, and Mystery Build files alike) — students must type code themselves; this applies to the Data Science notebook cells too (see REQ-DS-01).</td></tr>
+        <tr><td class="id-col">REQ-PY-08</td><td>Exception: approved code snippets on lesson pages get a dedicated "Insert" button that inserts directly into the editor via the app itself — not the OS clipboard. Regular copy/paste (Ctrl+V) remains blocked everywhere, since clipboard content carries no reliable origin — it can't be trusted to distinguish "copied from our site" from "copied from anywhere."</td></tr>
+      </table>
+
+      <h3>3.4 Socratic Error-Hint Assistant</h3>
+      <table class="scroll-x">
+        <tr><th class="id-col">ID</th><th>Requirement</th></tr>
+        <tr><td class="id-col">REQ-HINT-01</td><td>After 10s of no keystrokes following an edit, a callout may appear near the likely error line.</td></tr>
+        <tr><td class="id-col">REQ-HINT-02</td><td>The callout asks a guiding question about that line (Socratic) — it never states the bug or the fix.</td></tr>
+        <tr><td class="id-col">REQ-HINT-03</td><td>Student must run the code themselves and read the actual error before any further hint is offered.</td></tr>
+        <tr><td class="id-col">REQ-HINT-04</td><td>Hint frequency fades by milestone: full scaffolding in Milestones 1–2, reduced by Milestone 4, silent from the peer-testing sessions onward.</td></tr>
+        <tr><td class="id-col">REQ-HINT-05</td><td>Callout uses a restrained 2–3 color semantic palette and is sized/positioned using golden-ratio proportions (~1:1.618) relative to the editor pane.</td></tr>
+      </table>
+
+      <h3>3.5 Data Science Notebook Environment</h3>
+      <table class="scroll-x">
+        <tr><th class="id-col">ID</th><th>Requirement</th></tr>
+        <tr><td class="id-col">REQ-DS-01</td><td>Notebook-style environment (cell-based, mixed markdown + code) running on the same Pyodide runtime as the Python course for consistency.</td></tr>
+        <tr><td class="id-col">REQ-DS-02</td><td>Same Activity/Homework file pattern as Python, one notebook per cycle.</td></tr>
+        <tr><td class="id-col">REQ-DS-03</td><td>Final project notebook (Appendix C, Cycle 12 Showcase) persists as one continuously-built file across cycles, not per-cycle snapshots.</td></tr>
+        <tr><td class="id-col">REQ-DS-04</td><td>Where a student has already taken Python Programming, Pandas/NumPy content in Cycles 4 &amp; 9 is framed as "building on what you know," not re-taught from zero.</td></tr>
+      </table>
+
+      <h3>3.6 Homework &amp; Submissions</h3>
+      <table class="scroll-x">
+        <tr><th class="id-col">ID</th><th>Requirement</th></tr>
+        <tr><td class="id-col">REQ-HW-01</td><td>Homework file is assigned by the facilitator at end of session and becomes editable for the student until the next session unlocks.</td></tr>
+        <tr><td class="id-col">REQ-HW-02</td><td>Facilitator sees completion status per student per homework file (not started / in progress / submitted).</td></tr>
+        <tr><td class="id-col">REQ-HW-03</td><td>Facilitator can leave inline comments on a homework file, tied to specific lines/cells.</td></tr>
+      </table>
+
+      <h3>3.7 Facilitator Dashboard</h3>
+      <ul>
+        <li>Roster view per cohort with live status (active now / idle / not started today).</li>
+        <li>Ability to peek at a student's current Activity file read-only during a live session.</li>
+        <li>Homework completion overview across the cohort.</li>
+        <li>Session pacing controls (unlock next session, reopen a locked one for a student who missed a class).</li>
+      </ul>
+
+      <h3>3.8 Parent View</h3>
+      <ul>
+        <li>Read-only: sessions completed, homework status, upcoming session dates.</li>
+        <li>No access to a child's live code or ability to edit anything.</li>
+      </ul>
+
+      <h3>3.9 Admin/Ops Console</h3>
+      <ul>
+        <li>Create schools, cohorts, assign facilitators.</li>
+        <li>Cross-cohort reporting (completion rates, homework turnaround) for internal review and school-facing reports.</li>
+        <li>Manage course content versioning as curricula are updated between cohorts.</li>
+      </ul>
+    </section>
+
+    <section id="nonfunctional">
+      <h2><span class="num">04</span> Non-Functional Requirements</h2>
+      <table>
+        <tr><th>Area</th><th>Requirement</th></tr>
+        <tr><td><b>Performance</b></td><td>Pyodide runtime cached after first load; target &lt;3s cold start on a typical school Chromebook, near-instant on repeat visits.</td></tr>
+        <tr><td><b>Offline behavior</b></td><td>Once loaded, code execution works without connectivity; saves queue and sync when connection returns.</td></tr>
+        <tr><td><b>Device support</b></td><td>Must work on low-spec school Chromebooks/tablets and personal laptops/phones — no install required, browser-only.</td></tr>
+        <tr><td><b>Child data privacy</b></td><td>Minimal data collection (first name, grade, school only); registration facilitator-initiated to satisfy guardian-consent expectations under India's DPDP Act for minors' data.</td></tr>
+        <tr><td><b>Accessibility</b></td><td>Legible type scale for ages 11+, visible focus states, color choices not solely conveying meaning (relevant directly to the error-hint palette in REQ-HINT-05).</td></tr>
+      </table>
+    </section>
+
+    <section id="architecture">
+      <h2><span class="num">05</span> System Architecture</h2>
+      <p>Proposed stack: Next.js frontend hosted on Vercel, with serverless API routes for auth, file sync, and reporting. Pyodide runs entirely client-side. A managed Postgres instance (e.g. Neon/Supabase, both play well with Vercel) stores users, cohorts, progress, and file snapshots.</p>
+      <pre class="mermaid">
+flowchart LR
+  Browser["Student Browser<br/>Pyodide runtime"] -->|save/sync| API["Vercel Serverless API"]
+  API --> DB[("Postgres<br/>users, cohorts, files, progress")]
+  FacBrowser["Facilitator Dashboard"] --> API
+  ParentBrowser["Parent View"] --> API
+  AdminBrowser["Admin Console"] --> API
+      </pre>
+    </section>
+
+    <section id="data">
+      <h2><span class="num">06</span> Data Model (high level)</h2>
+      <table>
+        <tr><th>Entity</th><th>Key fields</th></tr>
+        <tr><td><b>User</b></td><td>role, first_name, secret_code (students) / email (facilitator, admin), school, grade, cohort_id</td></tr>
+        <tr><td><b>Cohort</b></td><td>course_id, school, facilitator_id, session_unlock_state</td></tr>
+        <tr><td><b>Session</b></td><td>course_id, order_index, activity_file_template, homework_file_template</td></tr>
+        <tr><td><b>StudentFile</b></td><td>student_id, session_id, type (activity/homework/mystery_build), content, last_saved_at</td></tr>
+        <tr><td><b>HomeworkStatus</b></td><td>student_id, session_id, status, facilitator_comments</td></tr>
+        <tr><td><b>ParentLink</b></td><td>parent_id, student_id, link_code</td></tr>
+      </table>
+    </section>
+
+    <section id="design">
+      <h2><span class="num">07</span> Visual Design Direction</h2>
+      <p>Base UI stays calm and legible — kids need to focus while coding — with the bold pop-art energy reserved for reward moments: session-complete screens, the Mystery Build reveal, badges. Per-course accent color and icon (not a full re-theme) so a student can tell Python from Data Science at a glance.</p>
+      <div class="card">
+        <p style="margin:0"><b>Error-hint UI specifically:</b> golden-ratio proportions for the callout's size/placement against the editor pane; a restrained 2–3 color semantic palette (not the full pop-art spectrum) so the hint reads as calm guidance, not an alarm.</p>
+      </div>
+      <div class="card">
+        <p style="margin:0"><b>Run controls:</b> 3–4 large labeled buttons (Run, Stop, and later Step) rather than a dense icon toolbar — no menu bar, no icons a student has to learn the meaning of first.</p>
+      </div>
+    </section>
+
+    <section id="open">
+      <h2><span class="num">08</span> Open Decisions</h2>
+      <div class="decision"><p><b>Secret-code scheme:</b> recommend system-generated unique code over user-chosen, to avoid class collisions and give a real access boundary. Needs your sign-off before build.</p></div>
+      <div class="decision"><p><b>Backend/DB provider:</b> Neon vs Supabase vs other — both integrate cleanly with Vercel; pick based on whether you want built-in auth (Supabase) or prefer to roll your own (Neon + custom auth).</p></div>
+      <div class="decision"><p><b>Notebook UI library:</b> build a lightweight custom cell-based notebook vs adapt an open-source one (e.g. Jupyter-lite) — affects Data Science build timeline.</p></div>
+      <div class="decision"><p><b>Facilitator training:</b> not a platform requirement per se, but the Socratic hint model and Mystery Build secrecy only work if facilitators are trained/dry-run before launch.</p></div>
+    </section>
+
+    <section id="future">
+      <h2><span class="num">09</span> Future Scope</h2>
+      <ul>
+        <li>Drone Program integration once hardware platform (DroneBlocks / CoDrone EDU / Tello) is finalized — will need a block-coding editor distinct from the Python/notebook environments.</li>
+        <li>Full line-by-line step-through debugger (Thonny-style Step Over/Into) inside the Pyodide runtime — meaningfully harder than the current/error-line highlight in REQ-PY-05, treated as its own phase-2 feature rather than a v1 requirement.</li>
+        <li>Electronics curriculum onboarding.</li>
+        <li>Cross-course achievement/badge system leveraging the pop-art visual language.</li>
+      </ul>
+    </section>
+
+  </main>
+  <footer>Sky Explorers Unified LMS — SRS Draft v0.1. Living document; open decisions in §8 should be closed before implementation begins.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+</script>
+
+<!--claude-mermaid-runtime-begin:3477-->
+<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>
+<script src="/_runtime/mermaid-11.16.1.min.js"></script>
+<script>(function(){
+var CFG={"palettes":{"light":{"surface":"#f4efe4","text":"#42392e","line":"#8a7f6d","border":"#7a6c52","bg":"#fffdf8"},"dark":{"surface":"#262b34","text":"#f2f3f5","line":"#a8adb8","border":"#9aa4b8","bg":"#1f232b"}}};
+if(typeof mermaid==='undefined')return;
+var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')).filter(function(p){if(p.hasAttribute('data-claude-mermaid-claimed'))return false;p.setAttribute('data-claude-mermaid-claimed','1');return true;});
+if(!pres.length)return;
+var mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null;
+var root=document.documentElement;
+var items=pres.map(function(pre){
+var mount=document.createElement('div');mount.className='mermaid-diagram';
+return {pre:pre,mount:mount,src:pre.textContent||''};
+});
+var seq=0;
+var renderGen=0;
+var lastKey='';
+function pageBg(fallback){
+var els=[document.body,document.documentElement];
+for(var i=0;i<els.length;i++){
+var c=els[i]&&getComputedStyle(els[i]).backgroundColor;
+if(c&&c!=='transparent'&&c!=='rgba(0, 0, 0, 0)')return c;
+}
+return fallback;
+}
+function render(){
+var theme=root.getAttribute('data-theme');
+var dark=theme==='dark'||(!!(mq&&mq.matches)&&theme!=='light');
+var pal=dark?CFG.palettes.dark:CFG.palettes.light;
+var bg=pageBg(pal.bg);
+var key=(dark?'d':'l')+'|'+bg;
+if(key===lastKey)return;
+lastKey=key;
+var gen=++renderGen;
+var font=getComputedStyle(document.body).fontFamily||'sans-serif';
+var nat={useMaxWidth:false};
+mermaid.initialize({
+startOnLoad:false,securityLevel:'strict',theme:'base',
+flowchart:nat,sequence:nat,er:nat,state:nat,class:nat,pie:nat,
+gantt:nat,journey:nat,timeline:nat,gitGraph:nat,mindmap:nat,xyChart:nat,
+quadrantChart:nat,sankey:nat,c4:nat,requirement:nat,block:nat,
+packet:nat,kanban:nat,architecture:nat,radar:nat,
+themeVariables:{background:bg,mainBkg:pal.surface,primaryColor:pal.surface,
+primaryTextColor:pal.text,lineColor:pal.line,primaryBorderColor:pal.border,
+nodeBorder:pal.border,clusterBorder:pal.border,edgeLabelBackground:bg,
+clusterBkg:'rgba(127,127,127,0.07)',titleColor:pal.text,
+darkMode:dark,rowOdd:bg,rowEven:'rgba(127,127,127,0.07)',
+attributeBackgroundColorOdd:bg,attributeBackgroundColorEven:'rgba(127,127,127,0.07)',
+fontSize:'16px',fontFamily:font},
+themeCSS:'.node rect, .node circle, .node polygon, .node path, .cluster rect { stroke-width: 2px; }'
+});
+items.forEach(function(it){
+var id='claude-mermaid-'+seq++;
+mermaid.render(id,it.src).then(function(r){
+if(gen!==renderGen)return;
+var prev=it.pre.previousElementSibling;
+if(prev&&prev.className==='mermaid-diagram'&&prev!==it.mount)return;
+it.mount.innerHTML=r.svg;
+if(!it.mount.parentNode)it.pre.parentNode.insertBefore(it.mount,it.pre);
+it.pre.style.display='none';
+},function(){
+var scratch=document.getElementById(id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+scratch=document.getElementById('d'+id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+if(gen!==renderGen)return;
+if(it.mount.parentNode)it.mount.parentNode.removeChild(it.mount);
+it.pre.style.display='';
+});
+});
+}
+render();
+if(mq&&mq.addEventListener)mq.addEventListener('change',render);
+if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+})();</script>
+<!--claude-mermaid-runtime-end-->
+</body>
+</html>

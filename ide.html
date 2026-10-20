@@ -1,0 +1,2026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Python Classroom IDE — Certificate Course (Milestone 1)</title>
+
+  <!-- Typography & Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800&family=Lilita+One&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- JSZip CDN for in-browser client-side zipping without any server -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <!-- Pyodide WASM Runtime -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+
+  <!-- Skulpt In-Browser Interactive Python Engine (Enables true in-console terminal input) -->
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+
+  <!-- Sky Explorers Design System (Optional local link with full inline fallback) -->
+  <link rel="stylesheet" href="design-system.css">
+
+  <style>
+    :root {
+      --ink: #18202d;
+      --candy-green: #6fc624;
+      --candy-red: #f14343;
+      --candy-gold: #fed034;
+      --candy-indigo: #4f46e5;
+      --course-python: #299bf5;
+      --editor-font-size: 16px;
+    }
+
+    body {
+      font-family: 'Fredoka', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0d1520;
+      background-image: 
+        radial-gradient(rgba(41, 155, 245, 0.12) 1.5px, transparent 1.5px),
+        radial-gradient(rgba(111, 198, 36, 0.08) 1.5px, transparent 1.5px);
+      background-size: 32px 32px;
+      background-position: 0 0, 16px 16px;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .font-display { font-family: 'Lilita One', cursive; }
+    .font-body { font-family: 'Fredoka', sans-serif; }
+    .font-code { font-family: 'IBM Plex Mono', monospace; }
+
+    /* Custom Scrollbar */
+    .ide-scroll::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .ide-scroll::-webkit-scrollbar-track {
+      background: #121824;
+    }
+    .ide-scroll::-webkit-scrollbar-thumb {
+      background: #2c384e;
+      border-radius: 6px;
+      border: 2px solid #121824;
+    }
+    .ide-scroll::-webkit-scrollbar-thumb:hover {
+      background: #3b4d6b;
+    }
+
+    /* Chunky Classroom Theme Components */
+    .chunky-box {
+      border: 3.5px solid var(--ink);
+      box-shadow: 0 5px 0 var(--ink);
+      border-radius: 18px;
+    }
+
+    .chunky-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Lilita One', cursive;
+      letter-spacing: 0.04em;
+      border: 3px solid var(--ink);
+      box-shadow: 0 4px 0 var(--ink);
+      border-radius: 14px;
+      padding: 0.5rem 1.15rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.08s ease;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .chunky-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 0 var(--ink);
+    }
+    .chunky-btn:active:not(:disabled) {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 var(--ink);
+    }
+    .chunky-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      filter: grayscale(40%);
+      transform: none;
+      box-shadow: 0 3px 0 var(--ink);
+    }
+
+    .btn-green { background: #6fc624; color: #18202d; }
+    .btn-green:hover:not(:disabled) { background: #7ee02a; }
+    .btn-red { background: #f14343; color: #ffffff; }
+    .btn-red:hover:not(:disabled) { background: #ff5656; }
+    .btn-blue { background: #299bf5; color: #ffffff; }
+    .btn-blue:hover:not(:disabled) { background: #47abf7; }
+    .btn-amber { background: #fed034; color: #18202d; }
+    .btn-amber:hover:not(:disabled) { background: #ffdc5c; }
+    .btn-indigo { background: #6366f1; color: #ffffff; }
+    .btn-indigo:hover:not(:disabled) { background: #818cf8; }
+    .btn-slate { background: #334155; color: #f8fafc; }
+    .btn-slate:hover:not(:disabled) { background: #475569; }
+
+    .btn-sm {
+      padding: 0.35rem 0.8rem;
+      font-size: 0.85rem;
+      border-radius: 11px;
+      border-width: 2.5px;
+      box-shadow: 0 3px 0 var(--ink);
+    }
+    .btn-sm:active:not(:disabled) {
+      box-shadow: 0 1px 0 var(--ink);
+      transform: translateY(2px);
+    }
+
+    /* Editor styling */
+    #editorArea {
+      font-size: var(--editor-font-size);
+      tab-size: 4;
+      line-height: 1.6;
+    }
+    #lineGutter {
+      font-size: var(--editor-font-size);
+      line-height: 1.6;
+      user-select: none;
+    }
+
+    /* Output Console Glow */
+    .terminal-window {
+      background: #090d14;
+      border: 3.5px solid var(--ink);
+      box-shadow: 0 6px 0 var(--ink);
+      border-radius: 18px;
+    }
+
+    /* Modal dialog */
+    .modal-backdrop {
+      background: rgba(10, 16, 26, 0.85);
+      backdrop-filter: blur(4px);
+    }
+
+    /* Toast notification */
+    #toastNotification {
+      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .file-item.active {
+      background: #1e293b;
+      border-color: #299bf5;
+    }
+  </style>
+</head>
+<body class="p-2 sm:p-3 md:p-4 flex flex-col h-screen overflow-hidden">
+
+  <!-- ================= TOP HEADER ================= -->
+  <header class="chunky-box bg-[#1a2333] p-2.5 sm:p-3.5 mb-2.5 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+    <!-- Branding & Course Badge -->
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-2xl bg-[#0f172a] border-[3px] border-[#18202d] shadow-[0_3px_0_#18202d] flex items-center justify-center p-1.5 shrink-0">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Python-logo-notext.svg" 
+             onerror="this.onerror=null; this.src='https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg';"
+             alt="Official Python Logo" 
+             class="w-full h-full object-contain">
+      </div>
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="font-display text-lg sm:text-xl md:text-2xl text-white tracking-wide">
+            PYTHON CLASSROOM IDE
+          </h1>
+          <span class="bg-[#299bf5] text-[#091522] border-[2px] border-[#18202d] text-[11px] font-bold px-2 py-0.5 rounded-lg uppercase shadow-[0_2px_0_#18202d]">
+            Milestone 1
+          </span>
+        </div>
+        <p class="text-[11px] sm:text-xs text-slate-400 font-semibold">
+          Certificate Course in Python • Sessions 1–4 • In-Browser WASM
+        </p>
+      </div>
+    </div>
+
+    <!-- Student Workspace Selector -->
+    <div class="flex items-center gap-2 bg-[#0d141e] border-[2.5px] border-[#18202d] rounded-xl px-2.5 py-1.5 shadow-[0_2px_0_#18202d]">
+      <span class="text-sm">👤</span>
+      <div class="flex flex-col">
+        <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Workspace</span>
+        <span id="currentStudentNameDisplay" class="text-xs sm:text-sm font-bold text-white truncate max-w-[110px] sm:max-w-[150px]">
+          Student
+        </span>
+      </div>
+      <button onclick="openStudentModal()" class="ml-1 text-[11px] font-bold text-amber-300 hover:text-amber-200 underline">
+        Switch
+      </button>
+    </div>
+
+    <!-- Lesson Example Dropdown (Requirement 1 & 2) -->
+    <div class="flex items-center gap-2">
+      <label for="templateSelect" class="text-xs font-bold text-slate-300 hidden xl:inline">
+        📚 Lesson Example:
+      </label>
+      <select id="templateSelect" onchange="handleLessonDropdownChange()" 
+        class="bg-[#0f172a] text-[#f8fafc] border-[2.5px] border-[#18202d] rounded-xl px-3 py-1.5 text-xs sm:text-sm font-bold shadow-[0_3px_0_#18202d] outline-none cursor-pointer hover:bg-[#1e293b] max-w-[260px] sm:max-w-none">
+        <!-- Injected dynamically from MILESTONE_CONFIG -->
+      </select>
+    </div>
+
+    <!-- Engine Status, Zoom & Layout -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <!-- Engine Selector (In-Console Interactive Typing vs Pyodide WASM) -->
+      <div class="flex items-center gap-1.5 bg-[#0d141e] border-[2px] border-[#18202d] rounded-xl px-2.5 py-1 shadow-[0_2px_0_#18202d]">
+        <span id="engineStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <select id="engineSelect" onchange="switchEngine()" class="bg-transparent text-xs font-bold text-emerald-300 outline-none cursor-pointer" title="Select Python execution engine">
+          <option value="skulpt" class="bg-[#0f172a] text-white" selected>⚡ In-Console Input (Interactive)</option>
+          <option value="pyodide" class="bg-[#0f172a] text-white">🐍 Pyodide 3.11 (WASM)</option>
+        </select>
+      </div>
+
+      <!-- Font Zoom Controls (Classroom Projector) -->
+      <div class="flex items-center bg-[#0d141e] border-[2px] border-[#18202d] rounded-xl p-0.5 shadow-[0_2px_0_#18202d]">
+        <button onclick="changeFontSize(-2)" class="px-2 py-1 text-xs font-bold text-slate-300 hover:text-white" title="Decrease Font Size">A-</button>
+        <span id="fontSizeDisplay" class="px-1 text-xs font-mono font-bold text-slate-400 border-x border-[#1e293b]">16px</span>
+        <button onclick="changeFontSize(2)" class="px-2 py-1 text-xs font-bold text-slate-300 hover:text-white" title="Increase Font Size">A+</button>
+      </div>
+
+      <!-- Layout Toggle: Split vs Stacked -->
+      <button id="layoutToggleBtn" onclick="toggleLayout()" class="chunky-btn btn-sm btn-slate hidden lg:inline-flex" title="Toggle Split or Stacked view">
+        ⬌ Split
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= MAIN IDE WORKSPACE ================= -->
+  <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
+
+    <!-- IDE Action Toolbar (Run, Reset, Autosave, File management) -->
+    <div class="chunky-box bg-[#16202e] p-2 sm:p-2.5 mb-2.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+      
+      <!-- Primary Execution Controls -->
+      <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+        <!-- RUN BUTTON -->
+        <button id="runBtn" onclick="runPythonCode()" class="chunky-btn btn-green min-w-[120px] sm:min-w-[140px]">
+          <span class="mr-1.5 text-base sm:text-lg">▶</span>
+          <span id="runBtnText">RUN CODE</span>
+        </button>
+
+        <!-- Toggle Sidebar (My Files) -->
+        <button onclick="toggleSidebar()" class="chunky-btn btn-slate btn-sm" title="Toggle Student Files Sidebar">
+          📁 <span id="sidebarToggleText">My Files</span>
+        </button>
+
+        <!-- Toggle STDIN Inputs (Run with zero popups) -->
+        <button onclick="toggleStdinDrawer()" class="chunky-btn btn-indigo btn-sm" title="Provide inputs ahead of time to run with zero popups">
+          ⌨️ <span id="stdinToggleText">Inputs (STDIN)</span>
+        </button>
+
+        <!-- CLEAR OUTPUT -->
+        <button onclick="clearTerminal()" class="chunky-btn btn-slate btn-sm" title="Clear console output">
+          🧹 Clear Console
+        </button>
+
+        <!-- RESET TO STARTER CODE (Requirement 4) -->
+        <button id="resetStarterBtn" onclick="confirmResetToStarter()" class="chunky-btn btn-amber btn-sm" title="Reset this lesson to original starter code">
+          ↺ Reset to Starter
+        </button>
+
+        <!-- CLEAR CODE -->
+        <button onclick="confirmClearEditor()" class="chunky-btn btn-red btn-sm" title="Clear current editor code">
+          ✕ Clear Code
+        </button>
+      </div>
+
+      <!-- Autosave indicator & Download/Upload Tools (Requirement 4 & 5) -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Autosave Indicator -->
+        <div id="saveStatusIndicator" class="flex items-center gap-1.5 text-xs font-mono font-semibold text-slate-400 bg-[#0c141f] border border-[#233145] px-2 py-1 rounded-lg">
+          <span id="saveStatusDot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span id="saveStatusText">Saved</span>
+        </div>
+
+        <!-- Execution Timer -->
+        <span id="execTimerBadge" class="hidden text-xs font-mono font-bold text-emerald-400 bg-[#0c1f17] border border-emerald-800 px-2 py-1 rounded-lg">
+          ⏱ 0.00s
+        </span>
+
+        <!-- Copy Code -->
+        <button onclick="copyCode()" class="chunky-btn btn-blue btn-sm" title="Copy code to clipboard">
+          📋 Copy
+        </button>
+
+        <!-- Download .py -->
+        <button onclick="downloadActiveFile()" class="chunky-btn btn-blue btn-sm" title="Download current active file as .py">
+          💾 Download .py
+        </button>
+
+        <!-- Download all as .zip -->
+        <button onclick="downloadAllAsZip()" class="chunky-btn btn-indigo btn-sm" title="Download all student files and lessons as a .zip archive">
+          📦 Download .zip
+        </button>
+
+        <!-- Upload .py -->
+        <label class="chunky-btn btn-slate btn-sm cursor-pointer" title="Import an existing .py file into your workspace">
+          📤 Upload .py
+          <input type="file" id="uploadFileInput" accept=".py" class="hidden" onchange="handleFileUpload(event)">
+        </label>
+
+        <!-- Save to Local Folder (File System Access API) -->
+        <button id="folderSyncBtn" onclick="saveToDeviceFolder()" class="chunky-btn btn-slate btn-sm hidden sm:inline-flex" title="Save file to local folder on your computer">
+          📂 Save to Folder
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Central Editor, Sidebar & Console Container -->
+    <div id="workspaceGrid" class="flex-1 flex flex-col lg:flex-row gap-2.5 min-h-0 overflow-hidden">
+      
+      <!-- COLLAPSIBLE STUDENT FILES SIDEBAR (Requirement 5) -->
+      <aside id="fileSidebar" class="w-full lg:w-64 chunky-box bg-[#111925] flex flex-col shrink-0 overflow-hidden hidden">
+        <!-- Sidebar Header -->
+        <div class="bg-[#182333] border-b-[2.5px] border-[#18202d] px-3 py-2 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm">📁</span>
+            <span class="font-display text-sm tracking-wide text-white">MY FILES</span>
+          </div>
+          <button onclick="promptCreateNewFile()" class="chunky-btn btn-green btn-sm !px-2 !py-0.5 text-xs" title="Create a new Python file">
+            + New .py
+          </button>
+        </div>
+
+        <!-- Files List -->
+        <div id="studentFilesList" class="flex-1 p-2 space-y-1.5 overflow-y-auto ide-scroll font-code text-xs">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Sidebar Footer & Storage Warning -->
+        <div class="p-2.5 bg-[#0d141e] border-t-[2px] border-[#18202d] text-[10px] text-slate-400 space-y-1 shrink-0">
+          <p class="font-bold text-amber-300">💡 Browser Storage Note:</p>
+          <p class="leading-tight text-slate-400">
+            Files are saved in this browser. Use <b>Download .zip</b> to back up work before clearing browser data.
+          </p>
+        </div>
+      </aside>
+
+      <!-- CODE EDITOR PANE -->
+      <div id="editorPane" class="flex-1 flex flex-col min-h-[260px] chunky-box bg-[#131b26] overflow-hidden">
+        
+        <!-- Editor Header Bar -->
+        <div class="bg-[#1c2738] border-b-[2.5px] border-[#18202d] px-3 py-1.5 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm">📄</span>
+            <span id="activeFileTitle" class="font-display text-sm tracking-wide text-white">Blank Editor</span>
+            <span id="activeFileTypeBadge" class="text-[10px] font-bold text-slate-400 bg-[#0f172a] px-2 py-0.5 rounded border border-[#334155]">
+              Empty
+            </span>
+          </div>
+          <div class="text-[11px] font-bold text-slate-400 flex items-center gap-2">
+            <span class="hidden sm:inline">Press</span>
+            <kbd class="bg-[#0f172a] text-amber-300 px-1.5 py-0.5 rounded border border-[#334155] text-xs">Ctrl + Enter</kbd>
+            <span class="hidden sm:inline">to Run</span>
+          </div>
+        </div>
+
+        <!-- Editor Gutter & Textarea Area -->
+        <div class="relative flex-1 flex overflow-hidden bg-[#101722]">
+          
+          <!-- Line Numbers Gutter -->
+          <div id="lineGutter" 
+               class="w-12 bg-[#0c121c] text-[#475569] font-code py-3 pr-2 text-right select-none border-r-[2px] border-[#1e293b] overflow-hidden shrink-0">
+            1
+          </div>
+
+          <!-- Python Code Textarea -->
+          <textarea id="editorArea" 
+                    spellcheck="false" 
+                    autocapitalize="off" 
+                    autocomplete="off"
+                    class="flex-1 bg-transparent text-[#f1f5f9] font-code p-3 resize-none outline-none ide-scroll whitespace-pre leading-relaxed overflow-auto"
+                    placeholder="# Write your Python code here... (Editor starts blank)"></textarea>
+
+        </div>
+
+        <!-- Collapsible STDIN Custom Inputs Drawer -->
+        <div id="stdinDrawer" class="hidden bg-[#0c131d] border-t-[2.5px] border-[#18202d] p-2 space-y-1.5 shrink-0">
+          <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center gap-1.5 font-bold text-amber-300 font-display">
+              <span>⌨️ PROGRAM INPUTS (STDIN)</span>
+              <span class="text-[10px] text-slate-400 font-normal font-body">— Enter inputs here (one per line) to run with ZERO browser popups!</span>
+            </div>
+            <button onclick="document.getElementById('stdinArea').value = ''" class="text-[11px] font-bold text-slate-400 hover:text-white">
+              Clear
+            </button>
+          </div>
+          <textarea id="stdinArea" rows="3" 
+            class="w-full bg-[#111925] text-amber-200 font-code text-xs p-2 rounded-lg border border-[#233145] outline-none resize-none ide-scroll placeholder:text-slate-600" 
+            placeholder="e.g. For multiple choices, enter line-by-line:&#10;1&#10;Alex Miller&#10;8149&#10;500&#10;3"></textarea>
+        </div>
+
+        <!-- Editor Footer Status -->
+        <div class="bg-[#121924] border-t-[2px] border-[#18202d] px-3 py-1 text-xs text-slate-400 flex items-center justify-between shrink-0">
+          <div id="cursorPosition" class="font-mono text-[11px]">Line 1, Col 1</div>
+          <div class="font-semibold text-slate-500 text-[11px]">Tab = 4 Spaces • Auto Indent Active</div>
+        </div>
+
+      </div>
+
+      <!-- OUTPUT TERMINAL PANE -->
+      <div id="consolePane" class="flex-1 lg:max-w-[46%] flex flex-col min-h-[200px] terminal-window overflow-hidden">
+        
+        <!-- Terminal Header Bar -->
+        <div class="bg-[#131b27] border-b-[2.5px] border-[#18202d] px-3 py-1.5 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-red-500 border border-[#18202d]"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-400 border border-[#18202d]"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500 border border-[#18202d]"></span>
+            <span class="font-display text-sm tracking-wide text-slate-200 ml-2">
+              OUTPUT TERMINAL
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="outputStatusTag" class="text-[11px] font-bold text-slate-400 font-mono">
+              Ready
+            </span>
+            <button onclick="copyOutput()" class="text-xs font-bold text-slate-400 hover:text-slate-200" title="Copy output text">
+              Copy Output
+            </button>
+          </div>
+        </div>
+
+        <!-- Terminal Output Area -->
+        <div id="terminalBody" class="flex-1 p-3 md:p-4 font-code text-xs sm:text-sm ide-scroll overflow-y-auto leading-relaxed bg-[#080d14]">
+          <div id="terminalContent" class="space-y-1">
+            <div class="text-slate-500 italic">
+              🐍 Python execution environment ready.<br>
+              Select a lesson or write code, then click "▶ RUN CODE" or press Ctrl+Enter.
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Input Bar for input() -->
+        <div id="inputBarContainer" class="hidden bg-[#16202e] border-t-[2.5px] border-[#18202d] p-2 flex items-center gap-2 shrink-0">
+          <span class="text-xs font-bold text-amber-300 font-mono">INPUT &gt;</span>
+          <input type="text" id="terminalInput" 
+                 class="flex-1 bg-[#0b1017] text-white font-code text-sm px-3 py-1.5 rounded-lg border border-[#334155] outline-none focus:border-[#299bf5]"
+                 placeholder="Type input here and press Enter...">
+          <button id="submitInputBtn" onclick="submitTerminalInput()" class="chunky-btn btn-sm btn-green">
+            Submit
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ================= MODALS & DIALOGS ================= -->
+
+  <!-- 1. Student Name / Workspace Modal (Requirement 5) -->
+  <div id="studentModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="chunky-box bg-[#1a2333] max-w-md w-full p-5 space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b-2 border-[#18202d]">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">👤</span>
+          <h2 class="font-display text-xl text-white">Student Workspace</h2>
+        </div>
+        <button id="closeStudentModalBtn" onclick="closeStudentModal()" class="text-slate-400 hover:text-white font-bold text-lg hidden">✕</button>
+      </div>
+
+      <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+        Enter your Name or Student ID. Each student gets an isolated browser workspace so shared computers keep your work separate!
+      </p>
+
+      <div class="space-y-2">
+        <label for="studentNameInput" class="text-xs font-bold text-slate-300 block">Student Name / ID:</label>
+        <input type="text" id="studentNameInput" 
+               class="w-full bg-[#0d141f] text-white font-body px-3.5 py-2.5 rounded-xl border-[2px] border-[#18202d] outline-none focus:border-[#299bf5] text-sm"
+               placeholder="e.g. Alex Miller" maxlength="30">
+      </div>
+
+      <!-- Known students on this device list -->
+      <div id="existingStudentsContainer" class="hidden space-y-1.5">
+        <label class="text-[11px] font-bold text-slate-400 block">Switch to existing student:</label>
+        <div id="existingStudentsList" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto ide-scroll">
+          <!-- Injected dynamically -->
+        </div>
+      </div>
+
+      <div class="bg-[#121a26] p-2.5 rounded-xl border border-[#223145] text-[11px] text-amber-300 leading-snug">
+        ⚠️ <b>Important Note:</b> Clearing browser history/cache or using private windows will erase browser-saved files. Use <b>Download .zip</b> regularly to back up your code to your computer.
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="saveStudentProfile()" class="chunky-btn btn-green w-full">
+          Start Coding ▶
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Toast Notification Bar -->
+  <div id="toastNotification" class="fixed bottom-4 right-4 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div id="toastContent" class="chunky-box bg-[#1e293b] text-white px-4 py-2.5 text-xs font-bold flex items-center gap-2 shadow-2xl">
+      <span id="toastIcon">💾</span>
+      <span id="toastMessage">Changes saved.</span>
+    </div>
+  </div>
+
+  <!-- ================= SCRIPTS & CONFIG ================= -->
+  <script>
+    // =========================================================================
+    // 1. MILESTONE 1 CONFIGURATION ARRAY (Requirement 1 & 3)
+    // Easily swappable for Milestone 2 in the future.
+    // =========================================================================
+    const MILESTONE_CONFIG = {
+      milestoneId: "milestone1",
+      milestoneTitle: "Milestone 1: Fundamentals of Python",
+      courseName: "Certificate Course in Python Programming",
+      lessons: [
+        {
+          id: "blank",
+          label: "Blank Editor",
+          description: "Starts completely empty on every visit",
+          starterCode: ""
+        },
+        {
+          id: "session1",
+          label: "Session 1: Hello & print()",
+          description: "Guided exercises: practice print(), messages, and banners",
+          starterCode: `# Session 1: Hello & print()
+# Practice displaying messages and creating banners using print()
+# Remember: Python executes code line-by-line, top to bottom.
+
+# ----------------------------------------------------
+# TASK 1: Print a top banner border
+# Use print() to display a line of equal signs: "========================================"
+# Hint: print("========================================")
+
+
+# ----------------------------------------------------
+# TASK 2: Print a welcome greeting and your name
+# Example: print("Welcome to Python! Cadet: Alex")
+
+
+# ----------------------------------------------------
+# TASK 3: Print a mission goal statement
+# Example: print("Goal: Learning my first Python commands.")
+
+
+# ----------------------------------------------------
+# TASK 4: Print a bottom banner border
+# Close your banner with another line of equal signs:
+
+
+`
+        },
+        {
+          id: "session2",
+          label: "Session 2: Variables, Data Types & Operators",
+          description: "Guided exercises: variables, types, conversions, and math operators",
+          starterCode: `# Session 2: Variables, Data Types & Operators
+# Practice creating variables, checking types, converting data, and using math operators.
+
+# ----------------------------------------------------
+# TASK 1: Create 4 variables with different data types:
+# - student_age: an integer (int), e.g. 15
+# - flight_speed: a decimal number (float), e.g. 345.5
+# - pilot_callsign: a text string (str), e.g. "SkyNova"
+# - is_ready: a boolean (bool), True or False
+
+
+# ----------------------------------------------------
+# TASK 2: Print your variables and check their data types using type()
+# Example: print(student_age)
+# Example: print(type(student_age))
+
+
+# ----------------------------------------------------
+# TASK 3: Type conversion
+# Convert the string altitude_text to an integer using int()
+# Then add 500 to it and print the result:
+altitude_text = "2500"
+
+
+# ----------------------------------------------------
+# TASK 4: Arithmetic operators
+# Given a = 7 and b = 2, calculate and print:
+# 1. Standard division: a / b
+# 2. Floor division: a // b
+# 3. Modulus / Remainder: a % b
+a = 7
+b = 2
+
+
+`
+        },
+        {
+          id: "session3",
+          label: "Session 3: input(), f-strings & Indentation",
+          description: "Guided exercises: input(), type conversions, f-strings, and indentation",
+          starterCode: `# Session 3: input(), f-strings & Indentation
+# Learn how input() reads text, converting types, f-strings, and indentation.
+
+# ----------------------------------------------------
+# TASK 1: Take user input
+# Use input() to ask for a pilot name and flight training hours.
+# Remember: input() always returns text as a string (str)!
+
+
+# ----------------------------------------------------
+# TASK 2: Convert and calculate
+# Convert flight hours from str to float, then calculate how many hours remain
+# until reaching 25.0 hours (target_hours = 25.0):
+
+
+# ----------------------------------------------------
+# TASK 3: Format output with an f-string
+# Display a friendly message showing the pilot's name and hours remaining.
+# Example: print(f"Cadet {pilot_name}, you have {hours_left} hours left!")
+
+
+# ----------------------------------------------------
+# TASK 4: Indentation practice
+# Write an if statement checking if flight_hours > 0 with a colon :
+# Indent the print statements inside the block by exactly 4 spaces!
+
+
+`
+        },
+        {
+          id: "session4",
+          label: "Session 4: Debugging & Tracebacks",
+          description: "Deliberate bugs with comments explaining goals for students to diagnose",
+          starterCode: `# Session 4: Debugging & Tracebacks
+# This script contains deliberate bugs!
+# Run the code, read the traceback in the terminal, and fix each bug one by one.
+
+# BUG 1: Python is case-sensitive! (NameError: name 'Print' is not defined)
+# Goal: Display the welcome greeting
+Print("Welcome to the Debugging Mission!")
+
+# BUG 2: Missing closing quote (SyntaxError: unterminated string literal)
+# Goal: Print the target location
+print("Destination: Mars Colony Alpha)
+
+# BUG 3: Unexpected indentation without a colon block (IndentationError)
+# Goal: Initialize the mission battery percentage
+    battery_level = 95
+
+# BUG 4: Cannot concatenate str and int with + operator (TypeError)
+# Goal: Print pilot callsign and squadron code
+callsign = "Falcon"
+squadron = 5
+print("Pilot: " + callsign + " Squad: " + squadron)
+
+# BUG 5: Cannot convert non-number string to integer (ValueError)
+# Goal: Convert speed input to number
+speed = int("supersonic")
+`
+        }
+      ]
+    };
+
+    // =========================================================================
+    // 2. STATE MANAGEMENT & STORAGE SYSTEM (Requirements 2, 4, 5)
+    // All storage is wrapped in try/catch for safe private-browsing operation.
+    // =========================================================================
+    let currentStudent = "";
+    let activeTarget = { type: "lesson", id: "blank", name: "Blank Editor" };
+    let studentFiles = {}; // { [filename]: content }
+    let autosaveTimer = null;
+    let lastSavedContent = "";
+    let isPyodideReady = false;
+    let isPyodideLoading = false;
+    let pyodideInstance = null;
+    let isRunning = false;
+    let currentFontSize = 16;
+    let isSplitLayout = true;
+
+    // DOM Elements
+    const templateSelect = document.getElementById("templateSelect");
+    const editorArea = document.getElementById("editorArea");
+    const lineGutter = document.getElementById("lineGutter");
+    const activeFileTitle = document.getElementById("activeFileTitle");
+    const activeFileTypeBadge = document.getElementById("activeFileTypeBadge");
+    const currentStudentNameDisplay = document.getElementById("currentStudentNameDisplay");
+    const saveStatusIndicator = document.getElementById("saveStatusIndicator");
+    const saveStatusText = document.getElementById("saveStatusText");
+    const saveStatusDot = document.getElementById("saveStatusDot");
+    const execTimerBadge = document.getElementById("execTimerBadge");
+    const outputStatusTag = document.getElementById("outputStatusTag");
+    const cursorPosition = document.getElementById("cursorPosition");
+    const terminalContent = document.getElementById("terminalContent");
+    const terminalBody = document.getElementById("terminalBody");
+    const runBtn = document.getElementById("runBtn");
+    const runBtnText = document.getElementById("runBtnText");
+    const resetStarterBtn = document.getElementById("resetStarterBtn");
+    const fileSidebar = document.getElementById("fileSidebar");
+    const studentFilesList = document.getElementById("studentFilesList");
+    const workspaceGrid = document.getElementById("workspaceGrid");
+    const consolePane = document.getElementById("consolePane");
+
+    // SAFE STORAGE HELPERS
+    function storageGet(key, fallback = null) {
+      try {
+        const val = localStorage.getItem(key);
+        return val !== null ? val : fallback;
+      } catch (err) {
+        console.warn("Storage read error:", err);
+        return fallback;
+      }
+    }
+
+    function storageSet(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (err) {
+        console.error("Storage write error:", err);
+        showToast("⚠️ Storage full or blocked (private browsing mode).", "warning");
+        return false;
+      }
+    }
+
+    function storageRemove(key) {
+      try {
+        localStorage.removeItem(key);
+      } catch (err) {
+        console.warn("Storage remove error:", err);
+      }
+    }
+
+    // =========================================================================
+    // 3. STUDENT PROFILE & WORKSPACE (Requirement 5)
+    // =========================================================================
+    function initStudentWorkspace() {
+      const savedStudent = storageGet("pyide:current_student", "");
+      if (savedStudent && savedStudent.trim()) {
+        currentStudent = savedStudent.trim();
+        loadStudentFiles();
+        currentStudentNameDisplay.textContent = currentStudent;
+      } else {
+        openStudentModal(false);
+      }
+    }
+
+    function openStudentModal(allowClose = true) {
+      const modal = document.getElementById("studentModal");
+      const closeBtn = document.getElementById("closeStudentModalBtn");
+      const nameInput = document.getElementById("studentNameInput");
+      const existingContainer = document.getElementById("existingStudentsContainer");
+      const existingList = document.getElementById("existingStudentsList");
+
+      nameInput.value = currentStudent || "";
+      if (allowClose && currentStudent) {
+        closeBtn.classList.remove("hidden");
+      } else {
+        closeBtn.classList.add("hidden");
+      }
+
+      // Populate list of known students on this browser
+      let students = [];
+      try {
+        students = JSON.parse(storageGet("pyide:students_list", "[]"));
+      } catch (e) { students = []; }
+
+      if (students.length > 0) {
+        existingContainer.classList.remove("hidden");
+        existingList.innerHTML = "";
+        students.forEach(s => {
+          const btn = document.createElement("button");
+          btn.className = "text-[11px] font-bold bg-[#1e293b] hover:bg-[#334155] text-slate-200 px-2.5 py-1 rounded-lg border border-[#334155]";
+          btn.textContent = s;
+          btn.onclick = () => {
+            nameInput.value = s;
+            saveStudentProfile();
+          };
+          existingList.appendChild(btn);
+        });
+      } else {
+        existingContainer.classList.add("hidden");
+      }
+
+      modal.classList.remove("hidden");
+      setTimeout(() => nameInput.focus(), 100);
+    }
+
+    function closeStudentModal() {
+      document.getElementById("studentModal").classList.add("hidden");
+    }
+
+    function saveStudentProfile() {
+      const nameInput = document.getElementById("studentNameInput");
+      const name = nameInput.value.trim();
+      if (!name) {
+        alert("Please enter your name or student ID to continue.");
+        nameInput.focus();
+        return;
+      }
+
+      // If switching from another student, autosave previous student first
+      if (currentStudent && currentStudent !== name) {
+        autosaveImmediately();
+      }
+
+      currentStudent = name;
+      storageSet("pyide:current_student", currentStudent);
+
+      // Add to students list
+      try {
+        let students = JSON.parse(storageGet("pyide:students_list", "[]"));
+        if (!students.includes(currentStudent)) {
+          students.push(currentStudent);
+          storageSet("pyide:students_list", JSON.stringify(students));
+        }
+      } catch (e) {}
+
+      currentStudentNameDisplay.textContent = currentStudent;
+      closeStudentModal();
+      loadStudentFiles();
+
+      // On first load or switch, always default to Blank Editor (Requirement 2)
+      setBlankEditor();
+      showToast(`👤 Workspace active: ${currentStudent}`, "success");
+    }
+
+    // =========================================================================
+    // 4. LESSON SELECTION & STORAGE (Requirements 1, 2, 3, 4)
+    // =========================================================================
+    function populateLessonDropdown() {
+      templateSelect.innerHTML = "";
+      MILESTONE_CONFIG.lessons.forEach(lesson => {
+        const opt = document.createElement("option");
+        opt.value = lesson.id;
+        opt.textContent = lesson.label;
+        templateSelect.appendChild(opt);
+      });
+      templateSelect.value = "blank";
+    }
+
+    // Set editor to blank state (Requirement 2: Editor starts empty on page load)
+    function setBlankEditor() {
+      activeTarget = { type: "lesson", id: "blank", name: "Blank Editor" };
+      templateSelect.value = "blank";
+      editorArea.value = "";
+      lastSavedContent = "";
+      activeFileTitle.textContent = "Blank Editor";
+      activeFileTypeBadge.textContent = "Empty";
+      resetStarterBtn.disabled = true;
+      resetStarterBtn.classList.add("opacity-50");
+      updateLineNumbers();
+      updateCursorInfo();
+      updateSaveIndicator("Saved");
+    }
+
+    // Handles dropdown switch with confirmation of unsaved changes (Requirement 2 & 4)
+    function handleLessonDropdownChange() {
+      const selectedId = templateSelect.value;
+      const lesson = MILESTONE_CONFIG.lessons.find(l => l.id === selectedId);
+      if (!lesson) return;
+
+      // Check if current editor has changes from saved state
+      const currentCode = editorArea.value;
+      if (currentCode !== lastSavedContent && lastSavedContent !== "") {
+        const confirmSwitch = confirm("You have unsaved changes in your current view. Your changes will be saved automatically to your workspace before switching. Continue?");
+        if (!confirmSwitch) {
+          // Revert select back to current active
+          if (activeTarget.type === "lesson") {
+            templateSelect.value = activeTarget.id;
+          }
+          return;
+        }
+      }
+
+      // Autosave current target first
+      autosaveImmediately();
+
+      if (selectedId === "blank") {
+        setBlankEditor();
+        return;
+      }
+
+      // Check if student has a saved version for this lesson (Requirement 4)
+      const storageKey = `pyide:${currentStudent}:${lesson.id}:code`;
+      const savedVersion = storageGet(storageKey, null);
+
+      if (savedVersion !== null) {
+        // Load student's saved code
+        editorArea.value = savedVersion;
+        lastSavedContent = savedVersion;
+      } else {
+        // First time opening: load starter code
+        editorArea.value = lesson.starterCode;
+        lastSavedContent = lesson.starterCode;
+        storageSet(storageKey, lesson.starterCode);
+      }
+
+      activeTarget = { type: "lesson", id: lesson.id, name: lesson.label };
+      activeFileTitle.textContent = lesson.label;
+      activeFileTypeBadge.textContent = "Lesson";
+      resetStarterBtn.disabled = false;
+      resetStarterBtn.classList.remove("opacity-50");
+
+      updateLineNumbers();
+      updateCursorInfo();
+      clearTerminal();
+      appendToTerminal(`Loaded: ${lesson.label}\n`, 'system');
+      updateSaveIndicator("Saved");
+    }
+
+    // Reset current lesson to original starter code (Requirement 4)
+    function confirmResetToStarter() {
+      if (activeTarget.type !== "lesson" || activeTarget.id === "blank") return;
+
+      const lesson = MILESTONE_CONFIG.lessons.find(l => l.id === activeTarget.id);
+      if (!lesson) return;
+
+      const ok = confirm(`Reset "${lesson.label}" to its original starter code?\n\nAny edits you made will be replaced by the original template.`);
+      if (!ok) return;
+
+      editorArea.value = lesson.starterCode;
+      lastSavedContent = lesson.starterCode;
+      const storageKey = `pyide:${currentStudent}:${lesson.id}:code`;
+      storageSet(storageKey, lesson.starterCode);
+
+      updateLineNumbers();
+      updateCursorInfo();
+      clearTerminal();
+      appendToTerminal(`↺ Reset "${lesson.label}" to official starter code.\n`, 'system');
+      updateSaveIndicator("Saved");
+      showToast("↺ Lesson reset to original starter code", "success");
+    }
+
+    function confirmClearEditor() {
+      const ok = confirm("Clear all code in the current editor?");
+      if (!ok) return;
+      editorArea.value = "";
+      updateLineNumbers();
+      updateCursorInfo();
+      autosaveImmediately();
+    }
+
+    // =========================================================================
+    // 5. AUTOSAVE SYSTEM (Requirement 4)
+    // Saves a few seconds after typing stops, and on lesson/file switch.
+    // =========================================================================
+    function scheduleAutosave() {
+      updateSaveIndicator("Saving...");
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(() => {
+        autosaveImmediately();
+      }, 1500); // 1.5 seconds after typing stops
+    }
+
+    function autosaveImmediately() {
+      if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      if (!currentStudent) return;
+
+      const code = editorArea.value;
+
+      if (activeTarget.type === "lesson") {
+        if (activeTarget.id !== "blank") {
+          const key = `pyide:${currentStudent}:${activeTarget.id}:code`;
+          storageSet(key, code);
+        }
+      } else if (activeTarget.type === "file") {
+        studentFiles[activeTarget.id] = code;
+        saveStudentFilesMap();
+      }
+
+      lastSavedContent = code;
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      updateSaveIndicator(`Saved ${timeStr}`);
+    }
+
+    function updateSaveIndicator(text) {
+      saveStatusText.textContent = text;
+      if (text.startsWith("Saved")) {
+        saveStatusDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+        saveStatusIndicator.className = "flex items-center gap-1.5 text-xs font-mono font-semibold text-slate-300 bg-[#0c141f] border border-[#233145] px-2 py-1 rounded-lg";
+      } else {
+        saveStatusDot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+        saveStatusIndicator.className = "flex items-center gap-1.5 text-xs font-mono font-semibold text-amber-300 bg-[#1f190c] border border-amber-900/60 px-2 py-1 rounded-lg";
+      }
+    }
+
+    // =========================================================================
+    // 6. STUDENT FILES MANAGER (Requirement 5)
+    // Personal folder: create, rename, open, delete .py files.
+    // =========================================================================
+    function loadStudentFiles() {
+      if (!currentStudent) return;
+      try {
+        const raw = storageGet(`pyide:${currentStudent}:files`, "{}");
+        studentFiles = JSON.parse(raw);
+      } catch (e) {
+        studentFiles = {};
+      }
+      renderStudentFilesList();
+    }
+
+    function saveStudentFilesMap() {
+      if (!currentStudent) return;
+      storageSet(`pyide:${currentStudent}:files`, JSON.stringify(studentFiles));
+      renderStudentFilesList();
+    }
+
+    function renderStudentFilesList() {
+      studentFilesList.innerHTML = "";
+      const filenames = Object.keys(studentFiles);
+
+      if (filenames.length === 0) {
+        studentFilesList.innerHTML = `
+          <div class="text-slate-500 italic p-3 text-center text-[11px]">
+            No custom files yet.<br>Click "+ New .py" to create your own script!
+          </div>
+        `;
+        return;
+      }
+
+      filenames.forEach(fname => {
+        const item = document.createElement("div");
+        const isActive = activeTarget.type === "file" && activeTarget.id === fname;
+        item.className = `file-item flex items-center justify-between p-2 rounded-xl border border-[#243247] hover:bg-[#1a2536] cursor-pointer transition-colors ${isActive ? 'active bg-[#1e293b] border-[#299bf5]' : 'bg-[#0f1724]'}`;
+
+        item.innerHTML = `
+          <div class="flex items-center gap-2 truncate flex-1 mr-2" onclick="openStudentFile('${fname}')">
+            <span class="text-xs">🐍</span>
+            <span class="truncate font-bold text-slate-200">${fname}</span>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="promptRenameFile('${fname}', event)" class="text-slate-400 hover:text-amber-300 p-1 text-xs" title="Rename file">✏️</button>
+            <button onclick="promptDeleteFile('${fname}', event)" class="text-slate-400 hover:text-rose-400 p-1 text-xs" title="Delete file">🗑️</button>
+          </div>
+        `;
+        studentFilesList.appendChild(item);
+      });
+    }
+
+    function toggleSidebar() {
+      const isHidden = fileSidebar.classList.contains("hidden");
+      if (isHidden) {
+        fileSidebar.classList.remove("hidden");
+        document.getElementById("sidebarToggleText").textContent = "Hide Files";
+      } else {
+        fileSidebar.classList.add("hidden");
+        document.getElementById("sidebarToggleText").textContent = "My Files";
+      }
+    }
+
+    function promptCreateNewFile() {
+      let name = prompt("Enter new Python file name (e.g., practice.py):");
+      if (!name) return;
+      name = name.trim();
+      if (!name.endsWith(".py")) name += ".py";
+
+      if (studentFiles[name] !== undefined) {
+        alert("A file with that name already exists in your folder.");
+        return;
+      }
+
+      autosaveImmediately();
+      studentFiles[name] = `# File: ${name}\n# Created by ${currentStudent}\n\nprint("Running ${name}!")\n`;
+      saveStudentFilesMap();
+      openStudentFile(name);
+      showToast(`📄 Created file: ${name}`, "success");
+    }
+
+    function openStudentFile(fname) {
+      if (studentFiles[fname] === undefined) return;
+      autosaveImmediately();
+
+      activeTarget = { type: "file", id: fname, name: fname };
+      editorArea.value = studentFiles[fname];
+      lastSavedContent = studentFiles[fname];
+
+      activeFileTitle.textContent = fname;
+      activeFileTypeBadge.textContent = "My File";
+      resetStarterBtn.disabled = true;
+      resetStarterBtn.classList.add("opacity-50");
+
+      renderStudentFilesList();
+      updateLineNumbers();
+      updateCursorInfo();
+      clearTerminal();
+      appendToTerminal(`Opened personal file: ${fname}\n`, 'system');
+      updateSaveIndicator("Saved");
+    }
+
+    function promptRenameFile(oldName, e) {
+      e.stopPropagation();
+      let newName = prompt(`Rename "${oldName}" to:`, oldName);
+      if (!newName || newName.trim() === oldName) return;
+      newName = newName.trim();
+      if (!newName.endsWith(".py")) newName += ".py";
+
+      if (studentFiles[newName] !== undefined) {
+        alert("A file with that name already exists.");
+        return;
+      }
+
+      studentFiles[newName] = studentFiles[oldName];
+      delete studentFiles[oldName];
+
+      if (activeTarget.type === "file" && activeTarget.id === oldName) {
+        activeTarget.id = newName;
+        activeTarget.name = newName;
+        activeFileTitle.textContent = newName;
+      }
+
+      saveStudentFilesMap();
+      showToast(`✏️ Renamed to: ${newName}`, "success");
+    }
+
+    function promptDeleteFile(fname, e) {
+      e.stopPropagation();
+      const ok = confirm(`Delete file "${fname}"? This cannot be undone.`);
+      if (!ok) return;
+
+      delete studentFiles[fname];
+      saveStudentFilesMap();
+
+      if (activeTarget.type === "file" && activeTarget.id === fname) {
+        setBlankEditor();
+      }
+      showToast(`🗑️ Deleted file: ${fname}`, "info");
+    }
+
+    // =========================================================================
+    // 7. IMPORT / EXPORT (Download .py, Download .zip, Upload .py, Local Folder)
+    // =========================================================================
+    function downloadActiveFile() {
+      const code = editorArea.value;
+      let filename = "script.py";
+      if (activeTarget.type === "file") {
+        filename = activeTarget.id;
+      } else if (activeTarget.type === "lesson" && activeTarget.id !== "blank") {
+        filename = `${activeTarget.id}.py`;
+      }
+
+      const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`💾 Downloaded ${filename}`, "success");
+    }
+
+    async function downloadAllAsZip() {
+      if (typeof JSZip === "undefined") {
+        alert("Zip utility loading, please try again in a moment.");
+        return;
+      }
+
+      autosaveImmediately();
+      const zip = new JSZip();
+      const folderName = `${currentStudent || "student"}_python_workspace`;
+      const zipFolder = zip.folder(folderName);
+
+      // Include all personal files
+      const filenames = Object.keys(studentFiles);
+      filenames.forEach(f => {
+        zipFolder.file(f, studentFiles[f]);
+      });
+
+      // Include all saved lessons
+      MILESTONE_CONFIG.lessons.forEach(l => {
+        if (l.id !== "blank") {
+          const key = `pyide:${currentStudent}:${l.id}:code`;
+          const saved = storageGet(key, l.starterCode);
+          zipFolder.file(`${l.id}_${l.label.replace(/[^a-zA-Z0-9]/g, '_')}.py`, saved);
+        }
+      });
+
+      // Include README
+      zipFolder.file("README.txt", `Python Classroom Workspace\nStudent: ${currentStudent}\nExported: ${new Date().toLocaleString()}\nMilestone: Milestone 1 (Sessions 1-4)\n`);
+
+      showToast("📦 Generating .zip archive...", "info");
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${folderName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("✅ .zip archive downloaded!", "success");
+    }
+
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const content = event.target.result;
+        let fname = file.name;
+        if (!fname.endsWith(".py")) fname += ".py";
+
+        studentFiles[fname] = content;
+        saveStudentFilesMap();
+        openStudentFile(fname);
+        showToast(`📥 Imported: ${fname}`, "success");
+        e.target.value = ""; // reset input
+      };
+      reader.readAsText(file);
+    }
+
+    // Chrome/Edge File System Access API (Requirement 5)
+    async function saveToDeviceFolder() {
+      if (!window.showSaveFilePicker) {
+        // Fallback for browsers without File System Access API
+        downloadActiveFile();
+        return;
+      }
+
+      try {
+        let suggestedName = "main.py";
+        if (activeTarget.type === "file") suggestedName = activeTarget.id;
+        else if (activeTarget.type === "lesson" && activeTarget.id !== "blank") suggestedName = `${activeTarget.id}.py`;
+
+        const handle = await window.showSaveFilePicker({
+          suggestedName: suggestedName,
+          types: [{
+            description: "Python File",
+            accept: { "text/x-python": [".py"] }
+          }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(editorArea.value);
+        await writable.close();
+        showToast("📂 File saved directly to your computer folder!", "success");
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          console.warn("Folder save fallback:", err);
+          downloadActiveFile();
+        }
+      }
+    }
+
+    let pyodidePromise = null;
+
+    async function initPyodide() {
+      if (pyodideInstance && isPyodideReady) return pyodideInstance;
+      if (pyodidePromise) return pyodidePromise;
+
+      pyodidePromise = (async () => {
+        isPyodideLoading = true;
+        updateEngineStatus('loading', 'Loading WASM...');
+
+        try {
+          if (window.loadPyodide) {
+            pyodideInstance = await window.loadPyodide({
+              indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/"
+            });
+
+            // Connect custom real-time stdout and input hooks
+            pyodideInstance.setStdout({
+              batched: (text) => window.appendRawTerminal(text + '\n', 'stdout')
+            });
+            pyodideInstance.setStderr({
+              batched: (text) => window.appendRawTerminal(text + '\n', 'stderr')
+            });
+
+            // Install direct terminal stream & input() bridge into Python runtime
+            await pyodideInstance.runPythonAsync(`
+import sys, builtins, js
+
+class _FastTerminalStream:
+    def __init__(self, stream_type='stdout'):
+        self.stream_type = stream_type
+    def write(self, s):
+        if s:
+            js.appendRawTerminal(str(s), self.stream_type)
+    def flush(self):
+        pass
+
+sys.stdout = _FastTerminalStream('stdout')
+sys.stderr = _FastTerminalStream('stderr')
+
+def _classroom_input(prompt=''):
+    res = js.pythonInputPrompt(str(prompt))
+    if res is None:
+        raise KeyboardInterrupt("Execution cancelled by user")
+    return str(res)
+
+builtins.input = _classroom_input
+`);
+
+            isPyodideReady = true;
+            updateEngineStatus('ready', 'Python 3.11 Ready');
+            console.log("Pyodide WASM Runtime & Live Stream bridge ready.");
+            return pyodideInstance;
+          } else {
+            throw new Error("loadPyodide unavailable");
+          }
+        } catch (err) {
+          console.warn("Pyodide CDN unavailable, running educational interpreter fallback:", err);
+          updateEngineStatus('fallback', 'Edu Interpreter Ready');
+          return null;
+        } finally {
+          isPyodideLoading = false;
+        }
+      })();
+
+      return pyodidePromise;
+    }
+
+    function updateEngineStatus(state, text) {
+      const engineStatusDot = document.getElementById("engineStatusDot");
+      const engineStatusText = document.getElementById("engineStatusText");
+      if (engineStatusText) {
+        engineStatusText.textContent = text;
+        if (state === 'ready') {
+          engineStatusText.className = "text-xs font-bold text-emerald-300";
+        } else if (state === 'fallback') {
+          engineStatusText.className = "text-xs font-bold text-blue-300";
+        } else {
+          engineStatusText.className = "text-xs font-bold text-amber-300";
+        }
+      }
+      if (engineStatusDot) {
+        if (state === 'ready') {
+          engineStatusDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+        } else if (state === 'fallback') {
+          engineStatusDot.className = "w-2.5 h-2.5 rounded-full bg-blue-400";
+        } else {
+          engineStatusDot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+        }
+      }
+    }
+
+    let currentEngine = "skulpt";
+
+    function switchEngine() {
+      const select = document.getElementById("engineSelect");
+      currentEngine = select ? select.value : "skulpt";
+      const dot = document.getElementById("engineStatusDot");
+      if (currentEngine === "skulpt") {
+        if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+        showToast("⚡ Active: In-Console Input Engine (Skulpt)", "success");
+      } else {
+        if (dot) dot.className = isPyodideReady ? "w-2.5 h-2.5 rounded-full bg-blue-400" : "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse";
+        showToast("🐍 Active: Pyodide 3.11 WASM Engine", "info");
+      }
+    }
+
+    function initSkulptVFS() {
+      if (typeof Sk === "undefined") return;
+      if (!Sk.builtinFiles) Sk.builtinFiles = { files: {} };
+
+      // 1. Virtual in-memory filesystem module for Skulpt
+      Sk.builtinFiles.files["src/lib/_vfs.py"] = `
+class VirtualFile:
+    def __init__(self, filename, mode='r'):
+        self.filename = str(filename)
+        self.mode = str(mode)
+        self.closed = False
+        if 'w' in self.mode:
+            _vfs_write(self.filename, "", False)
+    def write(self, s):
+        _vfs_write(self.filename, str(s), True)
+        return len(str(s))
+    def read(self):
+        return _vfs_read(self.filename)
+    def close(self):
+        self.closed = True
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc_val, tb):
+        self.close()
+`;
+
+      // 2. Virtual os module with os.path.exists
+      Sk.builtinFiles.files["src/lib/os.py"] = `
+class _Path:
+    def exists(self, p):
+        return _vfs_exists(str(p))
+
+path = _Path()
+`;
+
+      // 3. Virtual json module
+      Sk.builtinFiles.files["src/lib/json.py"] = `
+class JSONDecodeError(ValueError):
+    pass
+
+def dumps(obj, indent=None):
+    return _vfs_json_dumps(obj, indent)
+
+def dump(obj, fp, indent=None):
+    fp.write(dumps(obj, indent))
+
+def loads(s):
+    return _vfs_json_loads(s)
+
+def load(fp):
+    return loads(fp.read())
+`;
+
+      // Bridge functions to Javascript & LocalStorage
+      const getStorageKey = (filename) => `pyide:vfs:${currentStudent || 'default'}:${filename}`;
+
+      if (!Sk.builtins) Sk.builtins = {};
+
+      Sk.builtins._vfs_exists = function(p) {
+        const fname = Sk.ffi.remapToJs(p);
+        const exists = localStorage.getItem(getStorageKey(fname)) !== null || (window._pyideVfsMemory && fname in window._pyideVfsMemory);
+        return new Sk.builtin.bool(exists);
+      };
+
+      Sk.builtins._vfs_write = function(filename, content, append) {
+        const fname = Sk.ffi.remapToJs(filename);
+        const text = Sk.ffi.remapToJs(content);
+        if (!window._pyideVfsMemory) window._pyideVfsMemory = {};
+        if (append) {
+          const prev = window._pyideVfsMemory[fname] || localStorage.getItem(getStorageKey(fname)) || "";
+          window._pyideVfsMemory[fname] = prev + text;
+        } else {
+          window._pyideVfsMemory[fname] = text;
+        }
+        try {
+          localStorage.setItem(getStorageKey(fname), window._pyideVfsMemory[fname]);
+        } catch(e) {}
+        return Sk.builtin.none.none$;
+      };
+
+      Sk.builtins._vfs_read = function(filename) {
+        const fname = Sk.ffi.remapToJs(filename);
+        const val = (window._pyideVfsMemory && window._pyideVfsMemory[fname] !== undefined)
+          ? window._pyideVfsMemory[fname]
+          : localStorage.getItem(getStorageKey(fname));
+        if (val === null || val === undefined) {
+          throw new Sk.builtin.IOError("No such file or directory: '" + fname + "'");
+        }
+        return new Sk.builtin.str(val);
+      };
+
+      Sk.builtins._vfs_json_dumps = function(obj, indent) {
+        const jsObj = Sk.ffi.remapToJs(obj);
+        const ind = (indent && indent !== Sk.builtin.none.none$) ? Sk.ffi.remapToJs(indent) : null;
+        const str = JSON.stringify(jsObj, null, ind || undefined);
+        return new Sk.builtin.str(str);
+      };
+
+      Sk.builtins._vfs_json_loads = function(s) {
+        const jsStr = Sk.ffi.remapToJs(s);
+        try {
+          const parsed = JSON.parse(jsStr);
+          return Sk.ffi.remapToPy(parsed);
+        } catch (e) {
+          throw new Sk.builtin.ValueError("JSONDecodeError: " + e.message);
+        }
+      };
+    }
+
+    function runWithSkulpt(code) {
+      return new Promise((resolve, reject) => {
+        if (typeof Sk === "undefined") {
+          reject(new Error("In-console engine is still loading. Please try again in a moment."));
+          return;
+        }
+
+        initSkulptVFS();
+
+        Sk.configure({
+          output: function(text) {
+            window.appendRawTerminal(text, 'stdout');
+          },
+          read: function(x) {
+            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) {
+              throw "File not found: '" + x + "'";
+            }
+            return Sk.builtinFiles["files"][x];
+          },
+          inputfun: function(prompt) {
+            return new Promise(function(inputResolve) {
+              // 1. If STDIN drawer has pre-filled inputs, consume them automatically
+              if (stdinQueue && stdinQueue.length > 0) {
+                const val = stdinQueue.shift();
+                if (prompt) window.appendRawTerminal(prompt, 'system');
+                window.appendRawTerminal(val + '\n', 'input-echo');
+                inputResolve(val);
+                return;
+              }
+
+              // 2. Print prompt text into terminal
+              if (prompt) {
+                window.appendRawTerminal(prompt, 'system');
+              }
+
+              // 3. Show dedicated bottom Input Bar
+              const bottomBar = document.getElementById("inputBarContainer");
+              const bottomInput = document.getElementById("terminalInput");
+              if (bottomBar && bottomInput) {
+                bottomBar.classList.remove("hidden");
+                bottomInput.value = "";
+                bottomInput.placeholder = prompt ? prompt.trim() : "Type input here and press Enter...";
+              }
+
+              // 4. Create inline input element directly inside terminal line
+              const inputWrap = document.createElement('span');
+              inputWrap.className = 'inline-flex items-center align-middle ml-1.5';
+
+              const inlineInput = document.createElement('input');
+              inlineInput.type = 'text';
+              inlineInput.className = 'bg-[#1e293b] text-amber-300 font-mono font-bold text-xs sm:text-sm outline-none border border-amber-400 rounded px-2 py-0.5 min-w-[100px] max-w-[260px] shadow-sm animate-pulse';
+              inlineInput.autocomplete = 'off';
+              inlineInput.autocapitalize = 'off';
+              inlineInput.spellcheck = false;
+
+              inputWrap.appendChild(inlineInput);
+              if (currentTerminalLine) {
+                currentTerminalLine.appendChild(inputWrap);
+              } else {
+                terminalContent.appendChild(inputWrap);
+              }
+              terminalBody.scrollTop = terminalBody.scrollHeight;
+
+              // Auto-focus inline input (or bottom input on mobile)
+              setTimeout(() => {
+                if (window.innerWidth < 640 && bottomInput) {
+                  bottomInput.focus();
+                } else {
+                  inlineInput.focus();
+                }
+                terminalBody.scrollTop = terminalBody.scrollHeight;
+              }, 30);
+
+              let isResolved = false;
+              function finishInput(val) {
+                if (isResolved) return;
+                isResolved = true;
+                if (bottomBar) bottomBar.classList.add("hidden");
+                inputWrap.remove();
+                window.appendRawTerminal(val + '\n', 'input-echo');
+                inputResolve(val);
+              }
+
+              window.submitTerminalInput = function() {
+                const val = (bottomInput && bottomInput.value.trim() !== "") ? bottomInput.value : inlineInput.value;
+                finishInput(val);
+              };
+
+              inlineInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  finishInput(inlineInput.value);
+                }
+              });
+
+              if (bottomInput) {
+                bottomInput.onkeydown = function(e) {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    finishInput(bottomInput.value);
+                  }
+                };
+              }
+            });
+          },
+          inputfunTakesPrompt: true,
+          __future__: Sk.python3
+        });
+
+        const preamble = `
+import _vfs
+_builtin_orig_open = open
+def _vfs_open(filename, mode='r', *args, **kwargs):
+    if 'w' in str(mode) or 'a' in str(mode) or _vfs_exists(str(filename)):
+        return _vfs.VirtualFile(filename, mode)
+    try:
+        return _builtin_orig_open(filename, mode, *args, **kwargs)
+    except:
+        return _vfs.VirtualFile(filename, mode)
+open = _vfs_open
+`;
+        const fullCode = preamble + "\n" + code;
+
+        const promise = Sk.misceval.asyncToPromise(function() {
+          return Sk.importMainWithBody("<stdin>", false, fullCode, true);
+        });
+
+        promise.then(function(mod) {
+          resolve(mod);
+        }, function(err) {
+          reject(err);
+        });
+      });
+    }
+
+    function codeNeedsFullPython(code) {
+      // Only complex C-extensions not portable to lightweight JS interpreter
+      return /\b(import\s+(sqlite3|pandas|numpy|matplotlib|scipy|requests)|from\s+(sqlite3|pandas|numpy|matplotlib|requests)\s+import)/i.test(code);
+    }
+
+    async function runPythonCode() {
+      if (isRunning) return;
+      const code = editorArea.value;
+      if (!code.trim()) {
+        clearTerminal();
+        appendToTerminal("⚠️ Editor is empty. Select a lesson or write Python code first!", 'system');
+        return;
+      }
+
+      isRunning = true;
+      runBtn.disabled = true;
+      runBtnText.textContent = "RUNNING...";
+      outputStatusTag.textContent = "Executing...";
+      outputStatusTag.className = "text-[11px] font-bold text-amber-400 font-mono animate-pulse";
+
+      clearTerminal();
+      appendToTerminal("🚀 Executing Python code...\n", 'system');
+
+      // Initialize STDIN queue if user provided inputs in drawer
+      const stdinArea = document.getElementById("stdinArea");
+      if (stdinArea && stdinArea.value.trim()) {
+        stdinQueue = stdinArea.value.split('\n').map(s => s.trimEnd());
+      } else {
+        stdinQueue = [];
+      }
+
+      const startTime = performance.now();
+
+      try {
+        const needsFullRuntime = codeNeedsFullPython(code);
+
+        if (currentEngine === "pyodide" || needsFullRuntime) {
+          if (!pyodideInstance || !isPyodideReady) {
+            appendToTerminal("⏳ Initializing Python 3.11 WASM runtime... Please wait a moment.\n", "system");
+            await initPyodide();
+          }
+          if (pyodideInstance && isPyodideReady) {
+            const result = await pyodideInstance.runPythonAsync(code);
+            if (result !== undefined && result !== null) {
+              appendToTerminal(result.toString(), 'return');
+            }
+          } else {
+            throw new Error("Pyodide WASM runtime could not be loaded. Please check your internet connection.");
+          }
+        } else if (currentEngine === "skulpt" && typeof Sk !== "undefined") {
+          try {
+            await runWithSkulpt(code);
+          } catch (skErr) {
+            const skErrStr = (skErr && (skErr.toString ? skErr.toString() : skErr.message)) || String(skErr);
+            // If Skulpt lacks module, fall back to Pyodide WASM
+            if (skErrStr.includes("NotImplementedError") || skErrStr.includes("No module named") || skErrStr.includes("ImportError")) {
+              appendToTerminal(`\n⚡ Note: Feature requires full Python 3. Falling back to Pyodide 3.11 WASM...\n`, 'system');
+              if (!pyodideInstance || !isPyodideReady) {
+                await initPyodide();
+              }
+              if (pyodideInstance && isPyodideReady) {
+                const result = await pyodideInstance.runPythonAsync(code);
+                if (result !== undefined && result !== null) {
+                  appendToTerminal(result.toString(), 'return');
+                }
+                return;
+              }
+            }
+            throw skErr;
+          }
+        } else {
+          // Educational client simulator for offline fallback
+          await executeFallbackPython(code);
+        }
+
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+        execTimerBadge.textContent = `⏱ ${elapsed}s`;
+        execTimerBadge.classList.remove('hidden');
+
+        outputStatusTag.textContent = `Finished (${elapsed}s)`;
+        outputStatusTag.className = "text-[11px] font-bold text-emerald-400 font-mono";
+      } catch (err) {
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+        const errMessage = (err && (err.toString ? err.toString() : err.message)) || String(err);
+        if (errMessage.includes("KeyboardInterrupt") || errMessage.includes("Execution cancelled")) {
+          appendToTerminal(`\n🛑 Program stopped by user.`, 'system');
+          outputStatusTag.textContent = "Stopped";
+          outputStatusTag.className = "text-[11px] font-bold text-amber-400 font-mono";
+        } else {
+          appendToTerminal(`\nTraceback (most recent call last):\n${errMessage}`, 'stderr');
+          outputStatusTag.textContent = "Error";
+          outputStatusTag.className = "text-[11px] font-bold text-rose-400 font-mono";
+        }
+      } finally {
+        isRunning = false;
+        runBtn.disabled = false;
+        runBtnText.textContent = "RUN CODE";
+        const bar = document.getElementById("inputBarContainer");
+        if (bar) bar.classList.add("hidden");
+      }
+    }
+
+    // High-resilience client simulator for basic prints and math if Pyodide CDN drops
+    async function executeFallbackPython(code) {
+      await new Promise(r => setTimeout(r, 60));
+      const lines = code.split('\n');
+      const variables = {};
+
+      for (let rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+
+        if (line.startsWith('print(') && line.endsWith(')')) {
+          let inner = line.slice(6, -1).trim();
+          if ((inner.startsWith('"') && inner.endsWith('"')) || (inner.startsWith("'") && inner.endsWith("'"))) {
+            appendToTerminal(inner.slice(1, -1), 'stdout');
+          } else if (inner.startsWith('f"') || inner.startsWith("f'")) {
+            let content = inner.slice(2, -1);
+            content = content.replace(/\{([^}]+)\}/g, (_, expr) => {
+              expr = expr.split(':')[0].trim();
+              return variables[expr] !== undefined ? variables[expr] : expr;
+            });
+            appendToTerminal(content, 'stdout');
+          } else if (variables[inner] !== undefined) {
+            appendToTerminal(String(variables[inner]), 'stdout');
+          } else {
+            try {
+              const evaluated = Function(`"use strict"; return (${inner})`)();
+              appendToTerminal(String(evaluated), 'stdout');
+            } catch {
+              appendToTerminal(inner, 'stdout');
+            }
+          }
+        } else if (line.includes('=') && line.includes('input(')) {
+          const varName = line.split('=')[0].trim();
+          const match = line.match(/input\((.*)\)/);
+          let promptStr = "";
+          if (match && match[1]) {
+            promptStr = match[1].trim().replace(/^['"]|['"]$/g, '');
+          }
+          const userVal = window.pythonInputPrompt(promptStr);
+          variables[varName] = userVal;
+        } else if (line.includes('=') && !line.includes('==')) {
+          const [varName, varVal] = line.split('=').map(s => s.trim());
+          if (varVal.startsWith('"') || varVal.startsWith("'")) {
+            variables[varName] = varVal.slice(1, -1);
+          } else if (!isNaN(varVal)) {
+            variables[varName] = Number(varVal);
+          }
+        }
+      }
+    }
+
+    let currentTerminalLine = null;
+
+    function clearTerminal() {
+      terminalContent.innerHTML = '';
+      currentTerminalLine = null;
+      outputStatusTag.textContent = 'Cleared';
+      outputStatusTag.className = 'text-[11px] font-bold text-slate-500 font-mono';
+    }
+
+    window.appendRawTerminal = function(text, type = 'stdout') {
+      if (!text) return;
+      const parts = text.split('\n');
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        if (i > 0) {
+          currentTerminalLine = null;
+        }
+        if (part.length > 0) {
+          if (!currentTerminalLine) {
+            currentTerminalLine = document.createElement('div');
+            currentTerminalLine.className = 'whitespace-pre-wrap break-words ' + 
+              (type === 'stdout' ? 'text-emerald-300' : 
+               type === 'stderr' ? 'text-rose-400 font-semibold' : 
+               type === 'input-echo' ? 'text-amber-300 font-bold' : 
+               type === 'system' ? 'text-cyan-400 italic text-xs' : 'text-slate-300');
+            terminalContent.appendChild(currentTerminalLine);
+          }
+          currentTerminalLine.textContent += part;
+        }
+      }
+      terminalBody.scrollTop = terminalBody.scrollHeight;
+    };
+
+    let stdinQueue = [];
+
+    function toggleStdinDrawer() {
+      const drawer = document.getElementById("stdinDrawer");
+      const isHidden = drawer.classList.contains("hidden");
+      if (isHidden) {
+        drawer.classList.remove("hidden");
+        document.getElementById("stdinToggleText").textContent = "Hide Inputs";
+        document.getElementById("stdinArea").focus();
+      } else {
+        drawer.classList.add("hidden");
+        document.getElementById("stdinToggleText").textContent = "Inputs (STDIN)";
+      }
+    }
+
+    window.pythonInputPrompt = function(promptText) {
+      if (promptText) {
+        window.appendRawTerminal(promptText, 'system');
+      }
+
+      // 1. If user provided inputs in STDIN drawer, consume them automatically with ZERO popups!
+      if (stdinQueue && stdinQueue.length > 0) {
+        const val = stdinQueue.shift();
+        window.appendRawTerminal(val + "\n", 'input-echo');
+        return val;
+      }
+
+      // 2. Clean, focused single-line prompt question (no log dumping)
+      const cleanPrompt = promptText ? promptText.trim() : "Python input():";
+      const answer = window.prompt(cleanPrompt);
+      if (answer === null) {
+        window.appendRawTerminal("[cancelled by user]\n", 'system');
+        return null;
+      }
+      window.appendRawTerminal(answer + "\n", 'input-echo');
+      return answer;
+    };
+
+    function appendToTerminal(text, type = 'stdout') {
+      window.appendRawTerminal(text + (text.endsWith('\n') ? '' : '\n'), type);
+    }
+
+    function copyOutput() {
+      const text = terminalContent.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast("📋 Output copied to clipboard!", "success");
+      });
+    }
+
+    function copyCode() {
+      navigator.clipboard.writeText(editorArea.value).then(() => {
+        showToast("📋 Code copied to clipboard!", "success");
+      }).catch(() => {
+        editorArea.select();
+        document.execCommand('copy');
+        showToast("📋 Code copied!", "success");
+      });
+    }
+
+    // =========================================================================
+    // 9. EDITOR KEYBOARD & GUTTER HANDLING
+    // =========================================================================
+    function updateLineNumbers() {
+      const lines = editorArea.value.split('\n');
+      const count = lines.length || 1;
+      let gutterHTML = '';
+      for (let i = 1; i <= count; i++) {
+        gutterHTML += `<div>${i}</div>`;
+      }
+      lineGutter.innerHTML = gutterHTML;
+    }
+
+    function syncGutterScroll() {
+      lineGutter.scrollTop = editorArea.scrollTop;
+    }
+
+    function updateCursorInfo() {
+      const text = editorArea.value.substr(0, editorArea.selectionStart);
+      const lines = text.split('\n');
+      const currentLine = lines.length;
+      const currentCol = lines[lines.length - 1].length + 1;
+      cursorPosition.textContent = `Line ${currentLine}, Col ${currentCol}`;
+    }
+
+    editorArea.addEventListener('keydown', function(e) {
+      // Ctrl+Enter to Run
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        runPythonCode();
+        return;
+      }
+
+      // Tab: 4 spaces
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        if (e.shiftKey) {
+          const lineStart = this.value.lastIndexOf('\n', start - 1) + 1;
+          if (this.value.substr(lineStart, 4) === '    ') {
+            this.value = this.value.substring(0, lineStart) + this.value.substring(lineStart + 4);
+            this.selectionStart = this.selectionEnd = Math.max(lineStart, start - 4);
+          }
+        } else {
+          this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+          this.selectionStart = this.selectionEnd = start + 4;
+        }
+        updateLineNumbers();
+        scheduleAutosave();
+        return;
+      }
+
+      // Enter: auto-indent
+      if (e.key === 'Enter') {
+        const start = this.selectionStart;
+        const currentLine = this.value.substring(0, start).split('\n').pop();
+        const indentMatch = currentLine.match(/^\s*/);
+        let indent = indentMatch ? indentMatch[0] : '';
+        if (currentLine.trim().endsWith(':')) {
+          indent += '    ';
+        }
+        if (indent.length > 0) {
+          e.preventDefault();
+          const insertText = '\n' + indent;
+          this.value = this.value.substring(0, start) + insertText + this.value.substring(this.selectionEnd);
+          this.selectionStart = this.selectionEnd = start + insertText.length;
+          updateLineNumbers();
+          updateCursorInfo();
+          scheduleAutosave();
+          return;
+        }
+      }
+
+      // Auto-closing brackets/quotes
+      const pairs = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" };
+      if (pairs[e.key]) {
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        const selected = this.value.substring(start, end);
+        if (selected.length > 0) {
+          e.preventDefault();
+          this.value = this.value.substring(0, start) + e.key + selected + pairs[e.key] + this.value.substring(end);
+          this.selectionStart = start + 1;
+          this.selectionEnd = end + 1;
+          scheduleAutosave();
+          return;
+        }
+      }
+    });
+
+    editorArea.addEventListener('input', () => {
+      updateLineNumbers();
+      updateCursorInfo();
+      scheduleAutosave();
+    });
+    editorArea.addEventListener('scroll', syncGutterScroll);
+    editorArea.addEventListener('click', updateCursorInfo);
+    editorArea.addEventListener('keyup', updateCursorInfo);
+
+    // =========================================================================
+    // 10. DISPLAY CONTROLS & TOAST
+    // =========================================================================
+    function changeFontSize(delta) {
+      currentFontSize = Math.max(12, Math.min(28, currentFontSize + delta));
+      document.documentElement.style.setProperty('--editor-font-size', `${currentFontSize}px`);
+      document.getElementById("fontSizeDisplay").textContent = `${currentFontSize}px`;
+    }
+
+    function toggleLayout() {
+      isSplitLayout = !isSplitLayout;
+      const btn = document.getElementById("layoutToggleBtn");
+      if (isSplitLayout) {
+        workspaceGrid.className = "flex-1 flex flex-col lg:flex-row gap-2.5 min-h-0 overflow-hidden";
+        consolePane.className = "flex-1 lg:max-w-[46%] flex flex-col min-h-[200px] terminal-window overflow-hidden";
+        btn.textContent = "⬌ Split";
+      } else {
+        workspaceGrid.className = "flex-1 flex flex-col gap-2.5 min-h-0 overflow-hidden";
+        consolePane.className = "flex-1 flex flex-col min-h-[180px] terminal-window overflow-hidden";
+        btn.textContent = "⬍ Stacked";
+      }
+    }
+
+    let toastTimeout = null;
+    function showToast(message, type = "info") {
+      const toast = document.getElementById("toastNotification");
+      const text = document.getElementById("toastMessage");
+      const icon = document.getElementById("toastIcon");
+
+      text.textContent = message;
+      if (type === "success") icon.textContent = "✅";
+      else if (type === "warning") icon.textContent = "⚠️";
+      else icon.textContent = "💾";
+
+      toast.classList.remove("translate-y-20", "opacity-0");
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add("translate-y-20", "opacity-0");
+      }, 2500);
+    }
+
+    // =========================================================================
+    // 11. INITIALIZATION ON PAGE LOAD
+    // =========================================================================
+    window.addEventListener("DOMContentLoaded", () => {
+      // 1. Populate dropdown from MILESTONE_CONFIG (Requirement 1)
+      populateLessonDropdown();
+
+      // 2. Editor starts empty by default on first load (Requirement 2)
+      setBlankEditor();
+
+      // 3. Initialize or prompt for student workspace (Requirement 5)
+      initStudentWorkspace();
+
+      // 4. Initialize Pyodide WASM in background
+      initPyodide();
+    });
+  </script>
+</body>
+</html>
