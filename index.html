@@ -1211,6 +1211,7 @@ speed = int("supersonic")
       activeFileTypeBadge.textContent = "Empty";
       resetStarterBtn.disabled = true;
       resetStarterBtn.classList.add("opacity-50");
+      clearErrorLineHighlight();
       updateLineNumbers();
       updateCursorInfo();
       updateSaveIndicator("Saved");
@@ -1264,6 +1265,7 @@ speed = int("supersonic")
       resetStarterBtn.disabled = false;
       resetStarterBtn.classList.remove("opacity-50");
 
+      clearErrorLineHighlight();
       updateLineNumbers();
       updateCursorInfo();
       clearTerminal();
@@ -1741,6 +1743,16 @@ class VirtualFile:
         return self
     def __exit__(self, exc_type, exc_val, tb):
         self.close()
+
+def _vfs_open(filename, mode='r', *args, **kwargs):
+    if 'w' in str(mode) or 'a' in str(mode) or _vfs_exists(str(filename)):
+        return VirtualFile(filename, mode)
+    try:
+        if _builtin_orig_open:
+            return _builtin_orig_open(filename, mode, *args, **kwargs)
+    except:
+        pass
+    return VirtualFile(filename, mode)
 `;
 
       // 2. Virtual os module with os.path.exists
@@ -1774,6 +1786,10 @@ def load(fp):
       const getStorageKey = (filename) => `pyide:vfs:${currentStudent || 'default'}:${filename}`;
 
       if (!Sk.builtins) Sk.builtins = {};
+
+      if (!Sk.builtins._builtin_orig_open && Sk.builtins.open) {
+        Sk.builtins._builtin_orig_open = Sk.builtins.open;
+      }
 
       Sk.builtins._vfs_exists = function(p) {
         const fname = Sk.ffi.remapToJs(p);
@@ -1935,22 +1951,16 @@ def load(fp):
           __future__: Sk.python3
         });
 
-        const preamble = `
-import _vfs
-_builtin_orig_open = open
-def _vfs_open(filename, mode='r', *args, **kwargs):
-    if 'w' in str(mode) or 'a' in str(mode) or _vfs_exists(str(filename)):
-        return _vfs.VirtualFile(filename, mode)
-    try:
-        return _builtin_orig_open(filename, mode, *args, **kwargs)
-    except:
-        return _vfs.VirtualFile(filename, mode)
-open = _vfs_open
-`;
-        const fullCode = preamble + "\n" + code;
-
+        // Run user code directly without any preamble so line numbers map 1-to-1 with editor!
         const promise = Sk.misceval.asyncToPromise(function() {
-          return Sk.importMainWithBody("<stdin>", false, fullCode, true);
+          return Sk.importModule('_vfs', false, false);
+        }).then(function(vfsMod) {
+          if (vfsMod && vfsMod.$d && vfsMod.$d['_vfs_open']) {
+            Sk.builtins['open'] = vfsMod.$d['_vfs_open'];
+          }
+          return Sk.misceval.asyncToPromise(function() {
+            return Sk.importMainWithBody("<stdin>", false, code, true);
+          });
         });
 
         promise.then(function(mod) {
@@ -1981,6 +1991,7 @@ open = _vfs_open
       outputStatusTag.textContent = "Executing...";
       outputStatusTag.className = "text-[11px] font-bold text-amber-400 font-mono animate-pulse";
 
+      clearErrorLineHighlight();
       clearTerminal();
       appendToTerminal("🚀 Executing Python code...\n", 'system');
 
@@ -2049,10 +2060,18 @@ open = _vfs_open
           appendToTerminal(`\n🛑 Program stopped by user.`, 'system');
           outputStatusTag.textContent = "Stopped";
           outputStatusTag.className = "text-[11px] font-bold text-amber-400 font-mono";
+          clearErrorLineHighlight();
         } else {
           appendToTerminal(`\nTraceback (most recent call last):\n${errMessage}`, 'stderr');
           outputStatusTag.textContent = "Error";
           outputStatusTag.className = "text-[11px] font-bold text-rose-400 font-mono";
+
+          // Accurate line detection and visual highlighting
+          const lineMatch = errMessage.match(/\bline\s+(\d+)\b/i);
+          if (lineMatch) {
+            const errLine = parseInt(lineMatch[1], 10);
+            highlightErrorLine(errLine);
+          }
         }
       } finally {
         isRunning = false;
@@ -2209,14 +2228,36 @@ open = _vfs_open
     // =========================================================================
     // 9. EDITOR KEYBOARD & GUTTER HANDLING
     // =========================================================================
-    function updateLineNumbers() {
+    let currentErrorLine = null;
+
+    function updateLineNumbers(highlightLine = currentErrorLine) {
       const lines = editorArea.value.split('\n');
       const count = lines.length || 1;
       let gutterHTML = '';
       for (let i = 1; i <= count; i++) {
-        gutterHTML += `<div>${i}</div>`;
+        if (highlightLine && i === highlightLine) {
+          gutterHTML += `<div class="bg-rose-500/25 text-rose-400 font-bold border-r-2 border-rose-500 pr-1 transition-colors" title="Error detected on Line ${i}">⚠️ ${i}</div>`;
+        } else {
+          gutterHTML += `<div>${i}</div>`;
+        }
       }
       lineGutter.innerHTML = gutterHTML;
+    }
+
+    function highlightErrorLine(lineNum) {
+      if (typeof lineNum === "number" && lineNum > 0) {
+        currentErrorLine = lineNum;
+        updateLineNumbers(lineNum);
+        cursorPosition.innerHTML = `<span class="text-rose-400 font-bold">⚠️ Error on Line ${lineNum}</span>`;
+      }
+    }
+
+    function clearErrorLineHighlight() {
+      if (currentErrorLine !== null) {
+        currentErrorLine = null;
+        updateLineNumbers();
+        updateCursorInfo();
+      }
     }
 
     function syncGutterScroll() {
@@ -2224,6 +2265,7 @@ open = _vfs_open
     }
 
     function updateCursorInfo() {
+      if (currentErrorLine !== null) return;
       const text = editorArea.value.substr(0, editorArea.selectionStart);
       const lines = text.split('\n');
       const currentLine = lines.length;
@@ -2232,6 +2274,11 @@ open = _vfs_open
     }
 
     editorArea.addEventListener('keydown', function(e) {
+      // Clear error highlight when user starts typing/editing
+      if (currentErrorLine !== null && e.key.length === 1) {
+        clearErrorLineHighlight();
+      }
+
       // Ctrl+Enter to Run
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -2298,12 +2345,16 @@ open = _vfs_open
     });
 
     editorArea.addEventListener('input', () => {
+      clearErrorLineHighlight();
       updateLineNumbers();
       updateCursorInfo();
       scheduleAutosave();
     });
     editorArea.addEventListener('scroll', syncGutterScroll);
-    editorArea.addEventListener('click', updateCursorInfo);
+    editorArea.addEventListener('click', () => {
+      clearErrorLineHighlight();
+      updateCursorInfo();
+    });
     editorArea.addEventListener('keyup', updateCursorInfo);
 
     // =========================================================================
